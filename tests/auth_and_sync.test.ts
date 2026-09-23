@@ -1,4 +1,31 @@
 import { describe, it, expect, vi } from 'vitest';
+
+// Mock the Firestore write layer so rollback behavior is tested hermetically
+// (no real network / no hanging writes) — setDoc always rejects to exercise rollback.
+vi.mock('firebase/firestore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('firebase/firestore')>();
+  return {
+    ...actual,
+    setDoc: vi.fn(() => Promise.reject(new Error('simulated firestore write failure'))),
+  };
+});
+
+// Mock the firebase app config so no real Firebase project is contacted during tests
+vi.mock('../src/config/firebase', () => {
+  // الشكل lazy الجديد: موصلات دوال بدل ثوابت ساخنة
+  const fakeAuth = { currentUser: { uid: 'test_uid_sync' } };
+  return {
+    getFirebaseRuntime: () => ({ app: {}, db: {}, auth: fakeAuth, storage: {}, googleProvider: {} }),
+    getDb: () => ({}),
+    getAuth: () => fakeAuth,
+    getStorage: () => ({}),
+    getApp: () => ({}),
+    getGoogleProvider: () => ({}),
+    getMessagingSafe: async () => null,
+    firebaseConfig: {}
+  };
+});
+
 import { SyncEngine } from '../src/sync/syncEngine';
 
 describe('Real-Time Sync Engine & Multi-Account Isolation', () => {

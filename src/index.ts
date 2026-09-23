@@ -1,4 +1,13 @@
-import { app, db, auth, storage, googleProvider } from './config/firebase';
+import {
+  getFirebaseRuntime,
+  getDb,
+  getAuth,
+  getStorage,
+  getApp,
+  getGoogleProvider,
+  getMessagingSafe,
+  firebaseConfig
+} from './config/firebase';
 import { sanitizeHTML, sanitizePlainText, UserProfileSchema, PostCreateSchema, ChatMessageSchema } from './core/security';
 import { observability } from './services/observability';
 import { MediaUploadManager } from './media/uploadManager';
@@ -11,13 +20,16 @@ import { animeService, AniListProvider, JikanProvider } from './services/animePr
 // Initialize global observability
 observability.init();
 
-// Export all modules
+// Export all modules (lazy accessors — لا تهيئة Firebase عند مجرد التحميل)
 export {
-  app,
-  db,
-  auth,
-  storage,
-  googleProvider,
+  firebaseConfig,
+  getFirebaseRuntime,
+  getDb,
+  getAuth,
+  getStorage,
+  getApp,
+  getGoogleProvider,
+  getMessagingSafe,
   sanitizeHTML,
   sanitizePlainText,
   UserProfileSchema,
@@ -35,13 +47,18 @@ export {
 };
 
 // Global Browser Bridge (Window Object Compatibility)
+// ملاحظة: لم نعد نصدّر كائنات Firebase ساخنة (كانت تنشئ تطبيق SDK ثانياً بجانب جسر CDN).
+// الموصلات lazy تعيد استخدام مثيل جسر CDN نفسه عند أول استخدام.
 if (typeof window !== 'undefined') {
   (window as any).AnimeBlackCore = {
-    app,
-    db,
-    auth,
-    storage,
-    googleProvider,
+    firebaseConfig,
+    getFirebaseRuntime,
+    getDb,
+    getAuth,
+    getStorage,
+    getApp,
+    getGoogleProvider,
+    getMessagingSafe,
     sanitizeHTML,
     sanitizePlainText,
     UserProfileSchema,

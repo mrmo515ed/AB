@@ -5,7 +5,7 @@ export default [
     ignores: ['dist/**', 'node_modules/**', '**/*.min.js']
   },
   {
-    files: ['src/**/*.{ts,js}', 'server.js', 'tests/**/*.{ts,js}'],
+    files: ['src/**/*.{ts,js}', 'server.js', 'rtm.js', 'tests/**/*.{ts,js}'],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 'latest',
