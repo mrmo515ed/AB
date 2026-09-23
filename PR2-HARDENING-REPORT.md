@@ -18,7 +18,7 @@
 | `tests/rtm_v2.test.ts` | 15 tests: fingerprints, guardrail/queue, pause/resume, owner lifecycle, diagnostics completeness, account isolation |
 | `tests/hardening_rules.test.ts` | 21 tests: static verification of hardened rules + no-client-economy-writes + pure economy logic |
 | `tests/connectivity.test.ts` | 17 tests: full connectivity classification matrix |
-| `.github/workflows/ci.yml` | CI: install → typecheck → lint → unit → build (+ artifact) → functions build → e2e (Playwright/Chromium) |
+| `ci.workflow.yml` (repo root) | CI workflow definition: install → typecheck → lint → unit → build (+ artifact) → functions build → e2e (Playwright/Chromium). **Could not be pushed to `.github/workflows/` — the push integration lacks `workflows` permission (verified: git push rejected + Contents API 403).** Manual 30-second step in §17. |
 
 ## 2) Files modified
 
@@ -120,6 +120,7 @@ Typecheck: clean (`tsc --noEmit`, incl. task-3 test fixes). Lint: clean (`eslint
 3. **VAPID key:** Firebase Console → Project settings → Cloud Messaging → Web Push certificates → paste public key into `firebase-applet-config.json` → `vapidPublicKey`.
 4. *(Optional)* set `admin` custom claim via Admin SDK for trusted asset uploaders.
 5. After deploy, verify economy server mode in app → Settings → Sync Diagnostics (`economyMode: server`).
+6. **Enable CI (manual, ~30s):** GitHub → repo → *Add file → Create new file* → name it `.github/workflows/ci.yml` → paste the contents of `ci.workflow.yml` from the repo root → Commit. (The automated push of workflow files was blocked by the integration's missing `workflows` permission — verified with both `git push` and the Contents API.)
 
 ## 18) Exact commands run
 
