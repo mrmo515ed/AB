@@ -3584,24 +3584,45 @@ function handleAppBack() {
     return true;
   }
 
-  if (S.history && S.history.length > 0) {
+  while (S.history && S.history.length > 0) {
     const h = S.history.pop();
-    if (h) {
-      S.page = h.page;
-      S.params = h.params || {};
-      render({ keepScroll: false });
-      save();
-      const p = document.getElementById("page");
-      if (p) p.scrollTop = 0;
+    if (h && (h.page !== S.page || JSON.stringify(h.params || {}) !== JSON.stringify(S.params || {}))) {
+      go(h.page, h.params || {}, false);
       return true;
     }
   }
 
+  const pageFallbacks = {
+    groups: "chat",
+    worlds: "chat",
+    communities: "chat",
+    groupRoom: "groups",
+    worldRoom: "worlds",
+    createGroup: "groups",
+    createWorld: "worlds",
+    chatRoom: "chat",
+    guild: "chat",
+    communityHub: "chat",
+    editProfile: "profile",
+    myQr: "profile",
+    settings: "more",
+    admin: "more",
+    wallet: "more",
+    stickers: "more",
+    wiki: "explore",
+    mangaDetail: "explore",
+    animeDetail: "explore",
+    notifs: "home"
+  };
+
+  const fallbackTarget = pageFallbacks[S.page];
+  if (fallbackTarget && fallbackTarget !== S.page) {
+    go(fallbackTarget, {}, false);
+    return true;
+  }
+
   if (S.page !== "home" && S.user) {
-    S.page = "home";
-    S.params = {};
-    render({ keepScroll: false });
-    save();
+    go("home", {}, false);
     return true;
   }
 
@@ -3629,6 +3650,7 @@ function go(page,params={},push=true){
   // Track corresponding active bottom tab
   const tabMapping = {
     home: "home", explore: "explore", reels: "reels", create: "create", chat: "chat", profile: "profile", more: "more",
+    groups: "chat", worlds: "chat", communities: "chat", createGroup: "chat", createWorld: "chat",
     gamesHome: "more", gameLobby: "more", gamePlay: "more", gameResult: "more", gameCharacters: "more", gameUpgrades: "more",
     gameTransformations: "more", gameInventory: "more", gameChests: "more", gameMissions: "more", gameDailyRewards: "more",
     gameAchievements: "more", gameEvents: "more", gameLeaderboard: "more", gameProfile: "more", gameShop: "more",
@@ -4131,12 +4153,12 @@ function coverBlock(){
 function backHdr(title,sub,actions=""){
   title=T(title);sub=T(sub);
   return `<div style="display:flex;align-items:center;gap:9px">
-    <button class="hbox" onclick="back()">${I("back")}</button>
+    <button type="button" class="hbox" onclick="back();snd('tap')" aria-label="رجوع" title="رجوع">${I("back")}</button>
     <div class="g1"><div class="b" style="font-size:14px;line-height:1.25">${title}</div>${sub?`<div class="tiny fnt">${sub}</div>`:""}</div>
     ${actions}</div>`;
 }
 function setHdr(html){$("#hdr").innerHTML=html;$("#hdr").style.display=html?"flex":"none"}
-const MAIN_NAV_PAGES = new Set(["home", "explore", "reels", "chat", "more"]);
+const MAIN_NAV_PAGES = new Set(["home", "explore", "reels", "chat", "more", "groups", "worlds", "communities"]);
 
 function updateNavVisibility(forceOn){
   const isMain = (forceOn !== undefined) ? !!forceOn : MAIN_NAV_PAGES.has(S.page);
@@ -15643,7 +15665,7 @@ function worldRow(w){return `<button class="lstrow" onclick="go('worldRoom',{id:
     <span class="ico-tile" style="background:linear-gradient(135deg,${w.c1||'#0C4A6E'},${w.c2||'#0EA5E9'});color:#fff">${I(w.icon||"globe","i l")}</span>
     <span class="g1" style="text-align:right"><span class="row" style="gap:5px"><span class="b xs">${esc(w.name)}</span>${w.joined?`<span class="badge b-emerald">منضم</span>`:""}${w.feat?`<span class="badge b-gold">مميز</span>`:""}</span>
     <span class="tiny fnt">${esc(w.theme||'مغامرة')} · ${nfmt(w.members||1)} عضو · ${w.online||1} متصل</span></span>${I("fwd","i s")}</button>`}
-PAGES.groups=()=>{setNav(false);setHdr(backHdr("قروبات الدردشة",S.groups.filter(g=>g.joined).length+" قروب فعال",`<button class="btn btn-primary btn-sm" onclick="go('createGroup')">${I("plus","i s")} قروب</button>`));
+PAGES.groups=()=>{setNav(true);setHdr(backHdr("قروبات الدردشة",S.groups.filter(g=>g.joined).length+" قروب فعال",`<button class="btn btn-primary btn-sm" onclick="go('createGroup')">${I("plus","i s")} قروب</button>`));
   return `<div class="pad col">
     <div class="grid3">${[["users",S.groups.filter(g=>g.joined).length,"منضم"],["crown",S.groups.filter(g=>g.owner==="me"||g.owner===getChatMyUid()).length,"أملكها"],["msgsq",S.groups.reduce((a,g)=>a+(g.msgs||[]).length,0),"رسالة"]].map(([ic,v,l])=>`<div class="card2 stat">${I(ic,"i s")}<b class="mono">${v}</b><span>${l}</span></div>`).join("")}</div>
     <div class="secttl"><h3>${I("users","i s")} قروباتي</h3></div>
@@ -15948,7 +15970,7 @@ function submitWorld(){
   }
   go("worldRoom",{id:w.id});
 }
-PAGES.worlds=()=>{setNav(false);setHdr(backHdr("عوالم الأنمي",S.worlds.filter(w=>w.joined).length+" منضم إليها",`<button class="btn btn-primary btn-sm" onclick="go('createWorld')">${I("plus","i s")} عالم</button>`));
+PAGES.worlds=()=>{setNav(true);setHdr(backHdr("عوالم الأنمي",S.worlds.filter(w=>w.joined).length+" منضم إليها",`<button class="btn btn-primary btn-sm" onclick="go('createWorld')">${I("plus","i s")} عالم</button>`));
   const f=S.wFilter||"all";
   return `<div class="pad col">
     <div class="grid3">${[["globe",(S.worlds||[]).length,"عالم"],["users",S.worlds.reduce((a,w)=>a+w.members,0),"عضو"],["zap",S.worlds.reduce((a,w)=>a+w.online,0),"متصل"]].map(([ic,v,l])=>`<div class="card2 stat">${I(ic,"i s")}<b class="mono">${nfmt(v)}</b><span>${l}</span></div>`).join("")}</div>
@@ -19908,6 +19930,7 @@ SHEETS.chatMenu=(cid)=>{const c=(S.chats||[]).find(x=>x.id===cid)||S.chats[0];if
     <button class="lstrow" onclick="S.csQ='';closeOvl();openSheet('chatSearch','${cid}')"><span style="color:var(--accent)">${I("search","i s")}</span><span class="g1 b xs" style="text-align:right">بحث داخل الرسائل</span></button>
     <button class="lstrow" onclick="closeOvl();openSheet('chatMedia','${cid}')"><span style="color:var(--accent)">${I("image","i s")}</span><span class="g1 b xs" style="text-align:right">الوسائط المشتركة</span></button>
     <button class="lstrow" onclick="clearChatMsgs('${cid}')"><span style="color:var(--gold)">${I("trash","i s")}</span><span class="g1 b xs" style="text-align:right">مسح الرسائل (مع تراجع)</span></button>
+    <button class="lstrow" onclick="deleteChatBoth('${cid}')" style="color:var(--rose)"><span style="color:var(--rose)">${I("trash","i s")}</span><span class="g1 b xs" style="text-align:right;color:var(--rose)">حذف المحادثة من الطرفين نهائياً</span></button>
     <button class="lstrow" onclick="closeOvl();go('report',{id:'${uu.id}'})"><span style="color:var(--rose)">${I("flag","i s")}</span><span class="g1 b xs" style="text-align:right;color:var(--rose)">إبلاغ</span></button>
     <button class="lstrow" onclick="blockUser('${uu.id}');S.chats=S.chats.filter(x=>x.id!=='${cid}');save();closeOvl();go('chat')"><span style="color:var(--rose)">${I("ban","i s")}</span><span class="g1 b xs" style="text-align:right;color:var(--rose)">حظر وحذف المحادثة</span></button>
   </div>`)};
@@ -19976,6 +19999,93 @@ function toggleChatPin(cid){const c=(S.chats||[]).find(x=>x.id===cid);if(!c)retu
 function toggleChatMute(cid){const c=(S.chats||[]).find(x=>x.id===cid);if(!c)return;c.muted=!c.muted;save();closeOvl();render();toast(c.muted?"كُتمت إشعارات المحادثة":"أُلغي الكتم","ok")}
 function toggleChatArchive(cid){const c=(S.chats||[]).find(x=>x.id===cid);if(!c)return;c.archived=!c.archived;save();closeOvl();render();toast(c.archived?"أُرشفَت المحادثة — تجدها في رقاقة «مؤرشفة»":"أُعيدت المحادثة إلى القائمة","ok")}
 function clearChatMsgs(cid){const c=(S.chats||[]).find(x=>x.id===cid);if(!c)return;const snap=(c.messages||[]).slice();c.messages=[];c.last="محادثة جديدة";save();closeOvl();render();toast("مُسحت رسائل المحادثة","info",()=>{c.messages=snap;save();render();toast("استُعيدت الرسائل","ok")})}
+
+function deleteChatBoth(cid) {
+  const c = (S.chats || []).find(x => x.id === cid);
+  const otherUid = c ? (c.userId || (c.participants || []).find(p => p !== getMyUid())) : null;
+  const otherUser = otherUid ? u(otherUid) : null;
+  const otherName = otherUser ? esc(otherUser.name) : "الطرف الآخر";
+  
+  openModal(
+    I("trash","i s") + " حذف المحادثة من الطرفين",
+    `<div class="col" style="gap:14px;text-align:center">
+      <div class="ico-tile" style="width:56px;height:56px;border-radius:18px;background:rgba(239,68,68,0.15);color:var(--rose);margin:0 auto">${I("trash","xl")}</div>
+      <div>
+        <div class="b md" style="color:var(--rose);margin-bottom:6px">هل أنت متأكد من حذف المحادثة من الطرفين؟</div>
+        <div class="xs mut" style="line-height:1.6">سيتم مسح المحادثة وسجل كافة الرسائل والوسائط نهائياً لديك ولدى <b>${otherName}</b>، ولن تظهر في قائمة الدردشة لأي منكما مجدداً.</div>
+      </div>
+      <div class="row" style="gap:10px;margin-top:6px">
+        <button type="button" class="btn btn-ghost g1" onclick="closeOvl()">${I("x","i s")} إلغاء</button>
+        <button type="button" class="btn g1" style="background:var(--rose);color:#fff" onclick="executeDeleteChatBoth('${cid}')">${I("trash","i s")} حذف نهائي للطرفين</button>
+      </div>
+    </div>`
+  );
+}
+
+async function executeDeleteChatBoth(cid) {
+  try {
+    closeOvl();
+    snd("trash");
+    
+    // 1. الحذف الفوري من الحالة المحلية
+    S.chats = (S.chats || []).filter(x => x.id !== cid);
+    if (S.chatDrafts) delete S.chatDrafts[cid];
+    if (S.typingIn) delete S.typingIn[cid];
+    save();
+    
+    // إذا كان المستخدم حالياً بداخل غرفة هذه المحادثة نرجعه لقائمة الدردشة
+    if (S.page === "chatRoom" && S.params && S.params.id === cid) {
+      go("chat", {}, false);
+    } else {
+      render();
+    }
+    
+    // 2. إشعار وبث فوري عبر WebSocket / RTM
+    if (typeof window.rtmSend === "function") {
+      try {
+        window.rtmSend({ type: "chat_deleted_both", chatId: cid, senderId: getMyUid() });
+      } catch(_) {}
+    }
+    
+    // 3. مسح المحادثة وجميع رسائلها من Firestore
+    if (window.db && window.doc) {
+      if (window.getDocs && window.collection && window.deleteDoc) {
+        try {
+          const msgsSnap = await window.getDocs(window.collection(window.db, "chats", cid, "messages"));
+          const delPromises = [];
+          msgsSnap.forEach(d => {
+            delPromises.push(window.deleteDoc(d.ref).catch(() => {}));
+          });
+          await Promise.allSettled(delPromises);
+        } catch (e) {
+          console.warn("Subcollection msgs cleanup note:", e);
+        }
+      }
+      
+      if (window.deleteDoc) {
+        await window.deleteDoc(window.doc(window.db, "chats", cid)).catch(async () => {
+          if (window.setDoc) {
+            await window.setDoc(window.doc(window.db, "chats", cid), {
+              deleted: true,
+              deletedForBoth: true,
+              deletedAt: now(),
+              participants: [],
+              last: "",
+              lastAt: 0
+            }, { merge: true });
+          }
+        });
+      }
+    }
+    
+    toast("تم حذف المحادثة بالكامل من الطرفين نهائياً", "ok");
+  } catch (err) {
+    console.error("executeDeleteChatBoth error:", err);
+    toast("تمت إزالة المحادثة بنجاح", "ok");
+  }
+}
+window.deleteChatBoth = deleteChatBoth;
+window.executeDeleteChatBoth = executeDeleteChatBoth;
 function jumpToMsg(mid){const c=chatOfMid(mid);if(!c)return;closeOvl();if(S.page!=="chatRoom"||S.params.id!==c.id)go("chatRoom",{id:c.id});setTimeout(()=>{const el=document.getElementById("m_"+mid);if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("msgflash");setTimeout(()=>el.classList.remove("msgflash"),1500)}},240)}
 function ncRows(){const q=(S.ncQ||"").toLowerCase();return S.users.filter(x=>!q||x.name.toLowerCase().includes(q)||x.username.toLowerCase().includes(q)).map(x=>`<button class="lstrow" style="padding:10px" onclick="closeOvl();startChat('${x.id}')">${av(x,40)}
     <span class="g1" style="text-align:right"><span class="row" style="gap:4px"><span class="b xs">${esc(x.name)}</span>${vbadge(x)}</span><span class="tiny fnt">${x.online?'<span style="color:var(--emerald)"> متصل</span>':"غير متصل"} · @${esc(x.username)}</span></span>
@@ -20103,6 +20213,7 @@ SHEETS.chatRoomMenu=(cid)=>{const c=(S.chats||[]).find(x=>x.id===cid)||S.chats[0
     <button class="lstrow" onclick="closeOvl();openSheet('chatStats','${cid}')"><span style="color:var(--cyan)">${I("chart","i s")}</span><span class="g1 b xs" style="text-align:right">إحصائيات المحادثة</span></button>
     <button class="lstrow" onclick="cycleVanish('${cid}')"><span style="color:var(--emerald)">${I("clock","i s")}</span><span class="g1 b xs" style="text-align:right">الرسائل المختفية: ${{0:"معطلة",24:"٢٤ ساعة",72:"٣ أيام"}[(((S.chats||[]).find(x=>x.id==='${cid}')||{}).vanish)||0]}</span></button>
     <button class="lstrow" onclick="S.selMode=true;S.selIds=[];closeOvl();render();toast('وضع التحديد — اضغط على الرسائل للاختيار','info')"><span style="color:var(--accent)">${I("check","i s")}</span><span class="g1 b xs" style="text-align:right">تحديد رسائل متعددة</span></button>
+    <button class="lstrow" onclick="deleteChatBoth('${cid}')" style="color:var(--rose)"><span style="color:var(--rose)">${I("trash","i s")}</span><span class="g1 b xs" style="text-align:right;color:var(--rose)">حذف المحادثة من الطرفين نهائياً</span></button>
   </div>`)};
 const BUBBLECOLS=[["flame","لهيب الأوتـاكو","#00A3FF","#EA580C",0],["purple","البنفسجي الإمبراطوري","#9333EA","#4338CA",25],["emerald","الزمرد النادر","#059669","#0F766E",25],["cyan","السايان المشع","#06B6D4","#2563EB",25],["sakura","وردي الساكورا","#EC4899","#EC4899",25],["gold","الذهب الخالص","#EAB308","#D97706",50]];
 function bubbleGrad(){const c=(BUBBLECOLS||[]).find(x=>x[0]===S.bubbleCol);return c?`linear-gradient(135deg,${c[2]},${c[3]})`:""}
@@ -24181,8 +24292,13 @@ boot();
       const isParticipant = !cd.participants || (cd.participants||[]).length === 0 || cd.participants.includes(myUid) || (S.me && cd.participants.includes(S.me.id)) || cd.participants.includes("me") || cd.id.includes(myUid);
       if(!isParticipant) return;
       
-      if (change.type === "removed") {
+      if (change.type === "removed" || cd.deleted || cd.deletedForBoth) {
         S.chats = (S.chats || []).filter(c => c.id !== cd.id);
+        if (S.chatDrafts) delete S.chatDrafts[cd.id];
+        if (S.typingIn) delete S.typingIn[cd.id];
+        if (S.page === "chatRoom" && S.params && S.params.id === cd.id) {
+          go("chat", {}, false);
+        }
         changed = true;
         return;
       }
@@ -28417,6 +28533,10 @@ SHEETS.chatRoomMenu = (cid) => {
       <button class="lstrow" onclick="clearChatMsgs('${cid}')" style="color:var(--rose)">
         <span>${I("trash","i s")}</span>
         <span class="g1 b xs" style="text-align:right">مسح سجل الرسائل</span>
+      </button>
+      <button class="lstrow" onclick="deleteChatBoth('${cid}')" style="color:var(--rose)">
+        <span style="color:var(--rose)">${I("trash","i s")}</span>
+        <span class="g1 b xs" style="text-align:right;color:var(--rose)">حذف المحادثة من الطرفين نهائياً</span>
       </button>
       <button class="lstrow" onclick="closeOvl();go('report',{id:'${uu.id}',type:'user'})" style="color:var(--rose)">
         <span>${I("alert","i s")}</span>

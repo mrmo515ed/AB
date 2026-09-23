@@ -219,7 +219,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isAdmin() || isChatParticipant(existing()));
       allow create: if isSignedIn() && (isAdmin() || (incoming().participants is list && request.auth.uid in incoming().participants));
       allow update: if isSignedIn() && (isAdmin() || isChatParticipant(existing()));
-      allow delete: if isAdmin();
+      allow delete: if isSignedIn() && (isAdmin() || isChatParticipant(existing()));
 
       match /messages/{messageId} {
         function parentChat() {
@@ -238,7 +238,7 @@ service cloud.firestore {
           (isChatParticipant(parentChat()) &&
            incoming().diff(existing()).affectedKeys().hasOnly(['st', 'status', 'read', 'delivered', 'reactions', 'deletedFor', 'updatedAt']))
         );
-        allow delete: if isSignedIn() && (existing().senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (isAdmin() || existing().senderId == request.auth.uid || isChatParticipant(parentChat()));
       }
     }
 
