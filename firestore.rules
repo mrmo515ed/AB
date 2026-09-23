@@ -263,7 +263,7 @@ service cloud.firestore {
         return isSignedIn() && (groupDoc().get('creatorUid', '') == request.auth.uid || groupDoc().get('creatorId', '') == request.auth.uid);
       }
       function isGroupPrivate() { return groupDoc().get('privacy', 'عام') == 'خاص'; }
-      function hasMemberUids() { return groupDoc().has('memberUids'); }
+      function hasMemberUids() { return 'memberUids' in groupDoc(); }
 
       allow read: if isSignedIn() && (
         isAdmin() || isMod() || !isGroupPrivate() || isGroupMember() || isGroupOwner()
@@ -288,7 +288,7 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/groups/$(groupId)).data;
         }
         function memberOfParent() { return isSignedIn() && request.auth.uid in parentGroup().get('memberUids', []); }
-        function parentHasMemberUids() { return parentGroup().has('memberUids'); }
+        function parentHasMemberUids() { return 'memberUids' in parentGroup(); }
         function parentIsPrivate() { return parentGroup().get('privacy', 'عام') == 'خاص'; }
         function parentOwner() {
           return isSignedIn() && (parentGroup().get('creatorUid', '') == request.auth.uid || parentGroup().get('creatorId', '') == request.auth.uid);
@@ -335,7 +335,7 @@ service cloud.firestore {
             request.auth.uid in community().get('adminUids', [])
           );
         }
-        function communityHasMemberUids() { return community().has('memberUids'); }
+        function communityHasMemberUids() { return 'memberUids' in community(); }
         function communityRestricted() { return community().get('visibility', 'public') == 'restricted' || community().get('privacy', 'عام') == 'خاص'; }
 
         // القراءة: عامة للمجتمعات العامة، وللأعضاء في المقيدة (تسامح للمستندات القديمة)
@@ -382,9 +382,12 @@ service cloud.firestore {
       // الإشعار لا يُنشأ إلا بصفتك المُحتِد الفعلي (fromUserId/senderId) أو أدمن — منع انتحال الإشعارات
       allow create: if isSignedIn() && (
         isAdmin() ||
-        (incoming().has('fromUserId') && incoming().fromUserId == request.auth.uid) ||
-        (incoming().has('senderId') && incoming().senderId == request.auth.uid) ||
-        incoming().userId == request.auth.uid
+        incoming().get('fromUserId', '') == request.auth.uid ||
+        incoming().get('senderId', '') == request.auth.uid ||
+        incoming().get('fromUid', '') == request.auth.uid ||
+        incoming().get('senderUid', '') == request.auth.uid ||
+        incoming().get('authorId', '') == request.auth.uid ||
+        incoming().get('userId', '') == request.auth.uid
       );
       allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || existing().targetUid == request.auth.uid || isAdmin());
     }

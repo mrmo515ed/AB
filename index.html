@@ -2680,7 +2680,10 @@ function ensureStateArrays(state){
     if(!Array.isArray(state.tickets)) state.tickets = [];
     if(!Array.isArray(state.savedAccounts)) state.savedAccounts = [];
     if(!Array.isArray(state.myCustomStickers)) state.myCustomStickers = [];
-    if(!state.game || typeof state.game !== "object") state.game = sDef.game || {};
+    if(!state.game || typeof state.game !== "object") state.game = (typeof sDef !== "undefined" && sDef && sDef.game) ? sDef.game : {};
+    if(!state.game.profile || typeof state.game.profile !== "object") {
+      state.game.profile = { hunterLevel: 1, energy: 50, maxEnergy: 50, gems: 25, coins: (state.coins != null ? state.coins : 500), hunterXp: 0, hunterXpNext: 100, currentRank: "E-Rank Hunter", equippedCharacterId: "c_ren", equippedStageId: "s_forest" };
+    }
     if(!Array.isArray(state.game.history)) state.game.history = [];
     if(!Array.isArray(state.game.antiCheatLogs)) state.game.antiCheatLogs = [];
     if(!Array.isArray(state.game.adminLogs)) state.game.adminLogs = [];
@@ -2734,6 +2737,21 @@ function isMe(id){
   return false;
 }
 window.isMe = isMe;
+
+function isMsgMine(m) {
+  if (!m) return false;
+  const myUid = getChatMyUid();
+  return (
+    m.uid === "me" ||
+    m.uid === myUid ||
+    m.senderId === myUid ||
+    m.fromId === myUid ||
+    m.from === "me" ||
+    (typeof isMe === "function" && (isMe(m.uid) || isMe(m.senderId) || isMe(m.fromId))) ||
+    (window.S && window.S.me && (m.senderId === window.S.me.id || m.senderId === window.S.me.uid || m.uid === window.S.me.id || m.uid === window.S.me.uid))
+  );
+}
+window.isMsgMine = isMsgMine;
 
 if(S.me && S.me.id === "me"){
   const myRealId = getMyUid();
@@ -23897,15 +23915,17 @@ boot();
   };
   const __dbOverride = (function(){ try { return localStorage.getItem("animeblack_firestore_db"); } catch(_) { return null; } })();
   const __useDbId = __dbOverride === "default" ? undefined : dbId;
+  const firestoreInitSettings = {
+    ignoreUndefinedProperties: true,
+    experimentalAutoDetectLongPolling: true
+  };
   try {
     window.db = __useDbId !== undefined
-      ? initializeFirestore(app, { ignoreUndefinedProperties: true }, __useDbId)
-      : initializeFirestore(app, { ignoreUndefinedProperties: true });
+      ? initializeFirestore(app, firestoreInitSettings, __useDbId)
+      : initializeFirestore(app, firestoreInitSettings);
   } catch (_) {
     try {
-      window.db = initializeFirestore(app, {
-        ignoreUndefinedProperties: true
-      });
+      window.db = initializeFirestore(app, firestoreInitSettings);
     } catch (e2) {
       window.db = getFirestore(app, dbId);
     }
@@ -23916,16 +23936,7 @@ boot();
   window.auth = getAuth(app);
   try { window.storage = getStorage(app); } catch (e) { console.warn('Storage init fallback:', e); }
 
-  // Gentle connection health check using cached getDoc to avoid forced 10s server blocking
-  async function testConnection() {
-    try {
-      await getDoc(doc(window.db, 'test', 'connection')).catch(() => {});
-      console.log("Firestore initialized and ready");
-    } catch (error) {
-      console.warn("Firestore: Operating in fast local/cache mode with background auto-sync.");
-    }
-  }
-  testConnection();
+  console.log("Firestore initialized and ready with resilient auto-polling and offline persistence.");
 
   /* مستمع الكناري — قياس حقيقي لحالة الاتصال بالواجهة الخلفية عبر البيانات الوصفية
      (fromCache=false يعني وصول بيانات مؤكدة من السيرفر). عند عودة الاتصال يعيد المدير
@@ -30914,32 +30925,43 @@ window.ensureGameState = function() {
   if (!window.S) return;
   const now = Date.now();
   
-  if (!S.game) {
-    S.game = {
-      profile: {
-        hunterLevel: 1,
-        hunterXp: 0,
-        hunterXpNext: 100,
-        coins: (S.coins != null ? S.coins : 500),
-        gems: 25,
-        energy: 50,
-        maxEnergy: 50,
-        lastEnergyUpdate: now,
-        highScore: 0,
-        bestDistance: 0,
-        totalKills: 0,
-        bossesDefeated: 0,
-        totalMatches: 0,
-        totalWins: 0,
-        currentRank: "E-Rank Hunter",
-        equippedCharacterId: "c_ren",
-        equippedStageId: "s_forest",
-        dailyStreak: 1,
-        lastDailyClaim: 0,
-        lastReward: "مكافأة الانضمام لأكاديمية الصيادين (500 عملة + 25 جوهرة)",
-        isBanned: false
-      },
-      characters: [
+  if (!S.game || typeof S.game !== "object") {
+    S.game = {};
+  }
+  
+  if (!S.game.profile || typeof S.game.profile !== "object") {
+    S.game.profile = {
+      hunterLevel: 1,
+      hunterXp: 0,
+      hunterXpNext: 100,
+      coins: (S.coins != null ? S.coins : 500),
+      gems: 25,
+      energy: 50,
+      maxEnergy: 50,
+      lastEnergyUpdate: now,
+      highScore: 0,
+      bestDistance: 0,
+      totalKills: 0,
+      bossesDefeated: 0,
+      totalMatches: 0,
+      totalWins: 0,
+      currentRank: "E-Rank Hunter",
+      equippedCharacterId: "c_ren",
+      equippedStageId: "s_forest",
+      dailyStreak: 1,
+      lastDailyClaim: 0,
+      lastReward: "مكافأة الانضمام لأكاديمية الصيادين (500 عملة + 25 جوهرة)",
+      isBanned: false
+    };
+  } else {
+    S.game.profile.maxEnergy = S.game.profile.maxEnergy || 50;
+    if (S.game.profile.energy == null) S.game.profile.energy = S.game.profile.maxEnergy;
+    if (S.game.profile.coins == null) S.game.profile.coins = (S.coins != null ? S.coins : 500);
+    if (S.game.profile.gems == null) S.game.profile.gems = 25;
+  }
+
+  if (!Array.isArray(S.game.characters) || S.game.characters.length === 0) {
+    S.game.characters = [
         {
           id: "c_ren",
           name: "رين — ظل النينجا",
@@ -31244,8 +31266,9 @@ window.ensureGameState = function() {
   }
 
   // Energy regeneration calculation
-  const p = S.game.profile;
+  const p = S.game.profile = S.game.profile || { energy: 50, maxEnergy: 50, lastEnergyUpdate: now };
   p.maxEnergy = p.maxEnergy || 50;
+  if (p.energy == null) p.energy = p.maxEnergy;
   if (p.energy < p.maxEnergy) {
     const elapsed = now - (p.lastEnergyUpdate || now);
     const regenInterval = 8 * 60 * 1000;
@@ -34268,24 +34291,6 @@ window.showPwaGuideModal = function() {
           </div>
         </div>
         <button class="btn btn-pri" style="width:100%;border-radius:14px" onclick="closeOvl();window.triggerPwaInstall()">${I("download","i s ico-bounce")} تثبيت الآن</button>
-      </div>`;
-  }
-  
-  const ovl = document.getElementById("ovl");
-  if (ovl) {
-    ovl.innerHTML = `<div class="ov glass" style="display:flex;align-items:center;justify-content:center;padding:16px">${guideContent}</div>`;
-  }
-};
-
-if (typeof window !== "undefined") {
-  window.addEventListener('DOMContentLoaded', () => {
-    window.pwaManager.init();
-  });
-}
-</script>
-</body>
-</html>
-dow.triggerPwaInstall()">${I("download","i s ico-bounce")} تثبيت الآن</button>
       </div>`;
   }
   

@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth as getFirebaseAuthSdk, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage as getFirebaseStorageSdk } from 'firebase/storage';
 import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -44,13 +44,23 @@ function detectHostRuntime(): Partial<FirebaseRuntime> | null {
 function createStandaloneRuntime(): FirebaseRuntime {
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   let db: unknown;
+  const settings = {
+    ignoreUndefinedProperties: true,
+    experimentalAutoDetectLongPolling: true
+  };
   try {
-    db = getFirestore(app as never, firebaseConfig.firestoreDatabaseId as never);
+    db = firebaseConfig.firestoreDatabaseId
+      ? initializeFirestore(app as never, settings, firebaseConfig.firestoreDatabaseId as never)
+      : initializeFirestore(app as never, settings);
   } catch (err) {
     // fallback غير عودي: مثيل app بديل بدل إعادة المحاولة على مثيل فسدت حالته
     console.warn('[firebase] named database init failed, using default database on a fresh app:', err);
-    const fallbackApp = initializeApp(firebaseConfig, 'animeblack-fallback-' + Date.now());
-    db = getFirestore(fallbackApp as never);
+    try {
+      const fallbackApp = initializeApp(firebaseConfig, 'animeblack-fallback-' + Date.now());
+      db = initializeFirestore(fallbackApp as never, settings);
+    } catch (_) {
+      db = getFirestore(app as never);
+    }
   }
   const auth = getFirebaseAuthSdk(app as never);
   const storage = getFirebaseStorageSdk(app as never);
