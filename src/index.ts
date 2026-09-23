@@ -16,6 +16,7 @@ import { cacheManager } from './cache/cacheManager';
 import { FCMNotificationManager } from './notifications/fcmManager';
 import { MetricsCollector } from './admin/metricsCollector';
 import { animeService, AniListProvider, JikanProvider } from './services/animeProvider';
+import { EconomyClient } from './economy/economyClient';
 
 // Initialize global observability
 observability.init();
@@ -41,6 +42,7 @@ export {
   cacheManager,
   FCMNotificationManager,
   MetricsCollector,
+  EconomyClient,
   animeService,
   AniListProvider,
   JikanProvider

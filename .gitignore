@@ -7,3 +7,4 @@ yarn-error.log*
 .vite/
 .playwright/
 playwright-report/
+functions/lib/

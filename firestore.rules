@@ -14,7 +14,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:@]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\\\-\\\\.:@]+$');
     }
 
     function incoming() {
@@ -32,7 +32,7 @@ service cloud.firestore {
     function isAdminEmail() {
       return isSignedIn() && (
         request.auth.token.email == 'm774545471@gmail.com' ||
-        (request.auth.token.email != null && request.auth.token.email.matches('(?i)m774545471@gmail\\.com'))
+        (request.auth.token.email != null && request.auth.token.email.matches('(?i)m774545471@gmail\\\\.com'))
       );
     }
 
@@ -55,6 +55,12 @@ service cloud.firestore {
     // الأدوار المتميزة التي لا يجوز لأي مستخدم منحها لنفسه
     function isPrivilegedRole(role) {
       return role in ['admin', 'Admin', 'Owner', 'Developer', 'SuperAdministrator', 'Moderator', 'SeniorModerator'];
+    }
+
+    // حقول الاقتصاد والامتيازات المحمية — لا يكتبها العميل إطلاقاً (السلطة للسيرفر الموثوق فقط)
+    function isProtectedEconomyKey(key) {
+      return key in ['coins', 'wallet', 'stars', 'xp', 'xpNext', 'level', 'points', 'reputation',
+                     'roles', 'role', 'isVerified', 'premium', 'entitlements', 'balance'];
     }
 
     // Default Deny Rule for undefined collections
@@ -97,6 +103,13 @@ service cloud.firestore {
 
     // ============================================================
     // Users & User Profile Security
+    // ------------------------------------------------------------
+    // القراءة عامة (ملفات عامة يحتاجها التطبيق) — القيود على الكتابة:
+    //  - لا يعدّل أي مستخدم اقتصاد مستخدم آخر (عملات/نجوم/سمعة) إطلاقاً
+    //  - لا يكتب المالك نفسه حقول الاقتصاد/الامتيازات المحمية
+    //    (السلطة للدوال السحابية الموثوقة عبر Admin SDK فقط)
+    //  - حد معروف: Firestore لا يدعم حجب حقل واحد عن القراءة داخل مستند
+    //    عام — الحقول الحساسة يجب ألا تُخزَّن هنا أصلاً (راجع تقرير PR2)
     // ============================================================
     match /users/{userId} {
       allow read: if true;
@@ -110,19 +123,21 @@ service cloud.firestore {
 
       // تحديث الملف:
       // 1. الأدمن يحدّث أي شيء
-      // 2. المالك يحدّث ملفه — لكن بدون تغيير الدور أو التوثيق إلى قيم متميزة (سد التصعيد)
-      // 3. الأقران الموقّعون يحدّثون حقول التفاعل الاجتماعي فقط
+      // 2. المالك يحدّث ملفه — بدون الدور/التوثيق وبدون أي حقل اقتصادي محمي
+      // 3. الأقران الموقّعون يحدّثون حقول التفاعل الاجتماعي فقط (بلا اقتصاد)
       allow update: if isSignedIn() && (
         isAdmin() ||
         isAdminEmail() ||
         (isOwner(userId)
           && incoming().get('role', existing().get('role', 'Member')) == existing().get('role', 'Member')
-          && incoming().get('isVerified', existing().get('isVerified', false)) == existing().get('isVerified', false)) ||
-        incoming().diff(existing()).affectedKeys().hasOnly(['followers', 'followers_list', 'followersCount', 'following', 'following_list', 'followingCount', 'coins', 'wallet', 'stars', 'reputation', 'views', 'rating', 'updatedAt'])
+          && incoming().get('isVerified', existing().get('isVerified', false)) == existing().get('isVerified', false)
+          && !incoming().diff(existing()).affectedKeys().hasAny(['coins', 'wallet', 'stars', 'xp', 'xpNext', 'level', 'points', 'reputation', 'roles', 'premium', 'entitlements', 'balance'])) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['followers', 'followers_list', 'followersCount', 'following', 'following_list', 'followingCount', 'views', 'rating', 'updatedAt'])
       );
 
       allow delete: if isAdmin() || isOwner(userId);
 
+      // بيانات المستخدم الخاصة (أجهزة FCM، مفاتيح، حالات خاصة) — المالك فقط
       match /{allUserData=**} {
         allow read: if isOwner(userId) || isAdmin();
         allow write: if isOwner(userId) || isAdmin();
@@ -152,8 +167,7 @@ service cloud.firestore {
         incoming().get('userId', request.auth.uid) == request.auth.uid
       );
 
-      // التفاعلات العامة تشمل الآن المفاتيح التي يكتبها التطبيق فعلاً:
-      // likedUsers/lastReaction (الإعجابات) و poll (التصويت) — كانت مرفوضة سابقاً فكُسرت المزامنة
+      // تفاعلات القراء بمفاتيح التفاعل فقط — التفاعلات ليست اقتصاداً محمياً
       allow update: if isSignedIn() && (
         isAdmin() ||
         isMod() ||
@@ -194,8 +208,7 @@ service cloud.firestore {
     }
 
     // ============================================================
-    // Direct Chats & Messages — المقيد بالأطراف الفعليين فقط
-    // (كانت أي مستخدم موقّع يستطيع قراءة أي محادثة خاصة!)
+    // Direct Chats & Messages — الأطراف الفعلية فقط
     // ============================================================
     function isChatParticipant(chatData) {
       return (chatData.participants is list && request.auth.uid in chatData.participants)
@@ -213,8 +226,12 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/chats/$(chatId)).data;
         }
         allow read: if isSignedIn() && (isAdmin() || isChatParticipant(parentChat()));
-        allow create: if isSignedIn() && (isAdmin() || incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid);
-        // إيصالات القراءة (st) والمشاركون يحدّثون حالة الرسائل — كانت مرفوضة سابقاً فانكسرت إيصالات القراءة
+        // إنشاء رسالة: هوية المرسل + عضوية فعلية في المحادثة (كانت العضوية مفقودة)
+        allow create: if isSignedIn() && (isAdmin() || (
+          (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid) &&
+          isChatParticipant(parentChat())
+        ));
+        // إيصالات القراءة (st) والمشاركون يحدّثون حالة الرسائل
         allow update: if isSignedIn() && (
           isAdmin() ||
           existing().senderId == request.auth.uid ||
@@ -232,26 +249,70 @@ service cloud.firestore {
     }
 
     // ============================================================
-    // Groups & Communities — تحديثات محدودة المفاتيح لغير المشرفين
+    // Groups — الرؤية حسب الخصوصية والعضوية الفعلية (memberUids)
+    // ------------------------------------------------------------
+    // التطبيق يكتب memberUids (معرفات Firebase الحقيقية) عند الانضمام/
+    // المغادرة. المستندات القديمة بلا memberUids تحافظ على سلوكها
+    // (قروب عام = قراءة لأي موقع، كتابة الرسائل لأي موقع بهوية صحيحة)
+    // حتى ترحيل البيانات — لا كسر للبيانات القائمة.
     // ============================================================
     match /groups/{groupId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      // غير المشرف/المالك: مفاتيح الانضمام والمغادرة والرسالة الأخيرة فقط
+      function groupDoc() { return resource.data; }
+      function isGroupMember() { return isSignedIn() && request.auth.uid in groupDoc().get('memberUids', []); }
+      function isGroupOwner() {
+        return isSignedIn() && (groupDoc().get('creatorUid', '') == request.auth.uid || groupDoc().get('creatorId', '') == request.auth.uid);
+      }
+      function isGroupPrivate() { return groupDoc().get('privacy', 'عام') == 'خاص'; }
+      function hasMemberUids() { return groupDoc().has('memberUids'); }
+
+      allow read: if isSignedIn() && (
+        isAdmin() || isMod() || !isGroupPrivate() || isGroupMember() || isGroupOwner()
+      );
+
+      allow create: if isSignedIn() && (
+        incoming().get('creatorUid', incoming().get('creatorId', request.auth.uid)) == request.auth.uid ||
+        isAdmin()
+      );
+
+      // غير المالك: مفاتيح العضوية والرسالة الأخيرة والنشاط فقط
       allow update: if isSignedIn() && (
         isAdmin() || isMod() ||
-        existing().creatorId == request.auth.uid ||
-        incoming().diff(existing()).affectedKeys().hasOnly(['members', 'lastMsg', 'lastAt', 'updatedAt', 'online', 'typing'])
+        isGroupOwner() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['members', 'memberUids', 'lastMsg', 'lastAt', 'updatedAt', 'online', 'typing'])
       );
+
       allow delete: if isAdmin() || (isSignedIn() && existing().creatorId == request.auth.uid);
 
       match /messages/{messageId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn() && (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid);
+        function parentGroup() {
+          return get(/databases/$(database)/documents/groups/$(groupId)).data;
+        }
+        function memberOfParent() { return isSignedIn() && request.auth.uid in parentGroup().get('memberUids', []); }
+        function parentHasMemberUids() { return parentGroup().has('memberUids'); }
+        function parentIsPrivate() { return parentGroup().get('privacy', 'عام') == 'خاص'; }
+        function parentOwner() {
+          return isSignedIn() && (parentGroup().get('creatorUid', '') == request.auth.uid || parentGroup().get('creatorId', '') == request.auth.uid);
+        }
+
+        // قراءة الرسائل: عام للقروبات العامة، وللأعضاء فقط في الخاصة
+        allow read: if isSignedIn() && (
+          isAdmin() || isMod() || parentOwner() ||
+          (parentIsPrivate() ? (memberOfParent() || !parentHasMemberUids()) : true)
+        );
+
+        // كتابة رسالة: هوية صحيحة + (عضو موثق، أو مستند قديم بلا memberUids)
+        allow create: if isSignedIn() && (
+          (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid) &&
+          (memberOfParent() || !parentHasMemberUids() || parentOwner() || isAdmin())
+        );
+
         allow update, delete: if isSignedIn() && (existing().senderId == request.auth.uid || isAdmin() || isMod());
       }
     }
 
+    // ============================================================
+    // Communities & Channels — العضوية حسب memberUids مع تسامح قديم
+    // ============================================================
     match /communities/{communityId} {
       allow read: if true;
       allow create: if isSignedIn();
@@ -263,12 +324,40 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /channels/{channelId}/messages/{messageId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn() && (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid);
+        function community() {
+          return get(/databases/$(database)/documents/communities/$(communityId)).data;
+        }
+        function communityMember() { return isSignedIn() && request.auth.uid in community().get('memberUids', []); }
+        function communityAdmin() {
+          return isSignedIn() && (
+            community().get('ownerUid', '') == request.auth.uid ||
+            community().get('ownerId', '') == request.auth.uid ||
+            request.auth.uid in community().get('adminUids', [])
+          );
+        }
+        function communityHasMemberUids() { return community().has('memberUids'); }
+        function communityRestricted() { return community().get('visibility', 'public') == 'restricted' || community().get('privacy', 'عام') == 'خاص'; }
+
+        // القراءة: عامة للمجتمعات العامة، وللأعضاء في المقيدة (تسامح للمستندات القديمة)
+        allow read: if isSignedIn() && (
+          isAdmin() || isMod() || communityAdmin() ||
+          (communityRestricted() ? (communityMember() || !communityHasMemberUids()) : true)
+        );
+
+        // الكتابة: عضوية فعلية (أو مستند قديم بلا memberUids) + هوية مرسل صحيحة
+        allow create: if isSignedIn() && (
+          (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid) &&
+          (communityMember() || !communityHasMemberUids() || communityAdmin() || isAdmin())
+        );
+
         allow update, delete: if isSignedIn() && (existing().senderId == request.auth.uid || isAdmin() || isMod());
       }
     }
 
+    // ============================================================
+    // Worlds — مساحات عامة بالتصميم: القراءة لموقّعين،
+    // والكتابة بهوية مرسل صحيحة (العوالم المفتوحة مفتوحة للجميع)
+    // ============================================================
     match /worlds/{worldId} {
       allow read: if true;
       allow create: if isSignedIn();
@@ -279,7 +368,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        // كانت عامة للجميع (حتى غير الموقعين) — أصبحت للموقعين فقط
         allow read: if isSignedIn();
         allow create: if isSignedIn() && (incoming().senderId == request.auth.uid || incoming().sender == request.auth.uid);
         allow update, delete: if isSignedIn() && (existing().senderId == request.auth.uid || isAdmin() || isMod());
@@ -400,7 +488,6 @@ service cloud.firestore {
     }
 
     // التطبيق لا يكتب هذه المجموعات من العميل إطلاقاً — الكتابة للإدارة فقط
-    // (كانت game_matches/game_leaderboard قابلة للكتابة من أي موقّع = لوحات صدارة مزيّفة)
     match /game_matches/{matchId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -437,10 +524,68 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // المكالمات: لا يستخدمها التطبيق حالياً — كتابة إدارية فقط حتى تُبنى بشكل مشاركين موثقين
+    // ============================================================
+    // Calls / Sessions — المشاركون الفعليون فقط (Phase 6)
+    // ------------------------------------------------------------
+    // مستند المكالمة: { callerUid, participants: [uid...], status, ... }
+    // ============================================================
     match /calls/{callId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      function isCallParticipant() {
+        return isSignedIn() && request.auth.uid in resource.data.get('participants', []);
+      }
+      function isCaller() {
+        return isSignedIn() && resource.data.get('callerUid', '') == request.auth.uid;
+      }
+
+      allow read: if isSignedIn() && (isCallParticipant() || isCaller() || isAdmin());
+      allow create: if isSignedIn() && (
+        incoming().participants is list &&
+        request.auth.uid in incoming().participants &&
+        incoming().get('callerUid', request.auth.uid) == request.auth.uid
+      );
+      // المشارك يحدّث حالة الجلسة/الإشارة فقط — دون العبث بالمشاركين أو المتصل
+      allow update: if isSignedIn() && (isAdmin() || isCaller() ||
+        (isCallParticipant() &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'accepted', 'endedAt', 'answer', 'signal', 'typing', 'lastAt', 'updatedAt']))
+      );
+      allow delete: if isSignedIn() && (isAdmin() || isCaller());
+
+      // قناة الإشارات: مشاركون فقط، وهوية مرسل صحيحة
+      match /signals/{signalId} {
+        function parentCall() {
+          return get(/databases/$(database)/documents/calls/$(callId)).data;
+        }
+        function participantOfParent() {
+          return isSignedIn() && request.auth.uid in parentCall().get('participants', []);
+        }
+        allow read: if isSignedIn() && (participantOfParent() || isAdmin());
+        allow create: if isSignedIn() && participantOfParent() &&
+          (incoming().senderId == request.auth.uid || incoming().get('from', request.auth.uid) == request.auth.uid);
+        allow update, delete: if isSignedIn() && (isAdmin() ||
+          (existing().senderId == request.auth.uid || existing().get('from', '') == request.auth.uid));
+      }
+    }
+
+    // ============================================================
+    // Economy — السلطة للسيرفر الموثوق فقط (Cloud Functions)
+    // ------------------------------------------------------------
+    // سجل معاملات الاقتصام ورصيداثه يكتبها Admin SDK حصراً —
+    // العميل يقرأ سجله فقط (للعرض)، ولا يكتب ولا يعدّل.
+    // ============================================================
+    match /economy_transactions/{txId} {
+      allow read: if isSignedIn() && (
+        resource.data.get('uid', '') == request.auth.uid ||
+        resource.data.get('fromUid', '') == request.auth.uid ||
+        resource.data.get('toUid', '') == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if false;   // الكتابة من الدوال السحابية (Admin SDK) فقط — تتجاوز القواعد
+    }
+
+    // مفاتيح منع الإعادة (idempotency) — يكتبها السيرفر فقط
+    match /economy_idempotency/{keyId} {
+      allow read: if isSignedIn() && keyId.matches('^' + request.auth.uid + '.*');
+      allow write: if false;
     }
   }
 }

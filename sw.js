@@ -1,7 +1,7 @@
 // ============================================================
 // Anime Black V7 - Production PWA Service Worker (طبقات كاش مكتوبة يدوياً — بدون Workbox)
 // ============================================================
-const CACHE_VERSION = 'anime-black-v7.3-legendary';
+const CACHE_VERSION = 'anime-black-v7.4-hardening';
 const STATIC_CACHE_NAME = `static-${CACHE_VERSION}`;
 const MEDIA_CACHE_NAME = `media-${CACHE_VERSION}`;
 
@@ -97,6 +97,16 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+// Update Safety — الصفحة تطلب من النسخة المنتظرة التسلم فوراً (بلا انتظار إغلاق التبويبات)
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING' || (event.data && event.data.type === 'SKIP_WAITING')) {
+    self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.source && event.source.postMessage({ type: 'VERSION', version: CACHE_VERSION });
+  }
+});
+
 // Push Notifications Handling (FCM & Web Push)
 self.addEventListener('push', (event) => {
   let data = { title: 'أنمي بلاك', body: 'لديك تنبيه جديد في أنمي بلاك' };
@@ -116,8 +126,9 @@ self.addEventListener('push', (event) => {
     data: data.data || { url: '/' },
     dir: 'rtl',
     lang: 'ar',
-    tag: data.tag || `ab-push-${Date.now()}`,
-    renotify: true
+    // منع التكرار: الوسم من السيرفر (chat:/group:) يجمّع إشعارات نفس المحادثة
+    tag: data.tag || data['google.c.a.collapse_key'] || `ab-push-${Date.now()}`,
+    renotify: false
   };
 
   event.waitUntil(

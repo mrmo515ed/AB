@@ -3028,14 +3028,8 @@ function syncUserStateToServer(immediate = false){
         site: (S.me && S.me.site) || "",
         favAnimeName: (S.me && S.me.favAnimeName) || "",
         favStudio: (S.me && S.me.favStudio) || "",
-        level: (S.me && S.me.level) || 1,
-        xp: (S.me && S.me.xp != null ? S.me.xp : 0),
-        xpNext: (S.me && S.me.xpNext != null ? S.me.xpNext : 100),
-        points: (S.me && S.me.points != null ? S.me.points : 0),
-        role: (S.me && S.me.role) || "Member",
-        coins: (S.me && S.me.coins != null ? S.me.coins : (S.coins || 100)),
-        stars: (S.me && S.me.stars != null ? S.me.stars : (S.stars || 5)),
-        reputation: (S.me && S.me.reputation) || 15,
+        // حقول الاقتصاد والامتيازات المحمية لا تُزامَن من العميل إطلاقاً —
+        // الرصيد/الخبرة/المستوى/الدور بسلطة السيرفر (Cloud Functions + قواعد المنع)
         badges: (S.me && S.me.badges) || [],
         followers: (S.me && S.me.followers) || 0,
         following: (S.me && S.me.following) || 0,
@@ -4169,6 +4163,35 @@ function navLPEnd(){if(__lp&&__lp!=="shown")clearTimeout(__lp);__lp=null}
 function unreadTotal(){
   return S.chats.reduce((a,c)=>a+(c.unread||0),0)+S.communities.reduce((a,c)=>a+c.channels.reduce((x,ch)=>x+(ch.unread||0),0),0)+S.notifs.filter(n=>!n.read).length;
 }
+/* ==== الاقتصاد: السلطة للسيرفر الموثوق (PR2 Phase 5) ====
+   - الرصيد السحابي لا يُكتب من العميل إطلاقاً (القواعد تمنعه)
+   - كل عملية تمر عبر دالة سحابية معاملةً (transaction) مع منع إعادة التشغيل
+   - عند عدم نشر الدوال: توازن محلي تجريبي معلَن بصدق (لا ادعاء مزامنة) */
+window.economyServerCall = function(name, data) {
+  if (typeof window.__callCloudFunction !== "function") return Promise.reject({ code: "functions/unavailable" });
+  return window.__callCloudFunction(name, data);
+};
+window.__economyIdemKey = function(prefix) {
+  return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+};
+window.__hasServerIdentity = function() {
+  try {
+    var cu = window.auth && window.auth.currentUser;
+    return !!(cu && cu.uid) && getMyUid() === cu.uid && getMyUid() !== "me" && getMyUid() !== "guest";
+  } catch (_) { return false; }
+};
+window.__economyMarkServerResult = function(res) {
+  try { if (res && res.data && res.data.ok) { S.economyMode = "server"; save(); } } catch (_) {}
+};
+window.__economyMarkLocalDemo = function(err) {
+  try {
+    if (S.economyMode !== "local-demo") {
+      S.economyMode = "local-demo";
+      save();
+      console.warn("[economy] Cloud Functions غير منشورة — وضع محلي تجريبي (الرصيد السحابي لن يتغير):", (err && err.code) || err);
+    }
+  } catch (_) {}
+};
 function addCoins(n,reason){
   S.coins=(S.coins||0)+n;
   if(!S.me) S.me={};
@@ -4176,10 +4199,15 @@ function addCoins(n,reason){
   if(reason)toast((n>0?"+":"")+n+" عملة سوداء · "+reason,"ok");
   snd("coin");
   save();
-  const targetUid=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||getMyUid();
-  if(window.db&&window.setDoc&&window.doc&&targetUid&&targetUid!=="me"){
-    window.setDoc(window.doc(window.db,"users",targetUid),{coins:S.coins,updatedAt:Date.now()},{merge:true}).catch(()=>{});
-  }
+  window.economyServerCall("economyAdjust", {
+    op: "adjust", currency: "coins", amount: n, reason: reason || "",
+    idempotencyKey: window.__economyIdemKey("coins")
+  }).then(function(res) {
+    window.__economyMarkServerResult(res);
+    if (res && res.data && typeof res.data.balance === "number" && res.data.balance !== S.coins) {
+      S.coins = res.data.balance; if (S.me) S.me.coins = S.coins; save();
+    }
+  }).catch(function(err) { window.__economyMarkLocalDemo(err); });
 }
 function addStars(n,reason){
   S.stars=(S.stars||0)+n;
@@ -4188,10 +4216,15 @@ function addStars(n,reason){
   if(reason)toast((n>0?"+":"")+n+" نجمة مشعة · "+reason,"ok");
   snd("coin");
   save();
-  const targetUid=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||getMyUid();
-  if(window.db&&window.setDoc&&window.doc&&targetUid&&targetUid!=="me"){
-    window.setDoc(window.doc(window.db,"users",targetUid),{stars:S.stars,updatedAt:Date.now()},{merge:true}).catch(()=>{});
-  }
+  window.economyServerCall("economyAdjust", {
+    op: "adjust", currency: "stars", amount: n, reason: reason || "",
+    idempotencyKey: window.__economyIdemKey("stars")
+  }).then(function(res) {
+    window.__economyMarkServerResult(res);
+    if (res && res.data && typeof res.data.balance === "number" && res.data.balance !== S.stars) {
+      S.stars = res.data.balance; if (S.me) S.me.stars = S.stars; save();
+    }
+  }).catch(function(err) { window.__economyMarkLocalDemo(err); });
 }
 function addXP(n,reason){
   if(!S.me) S.me={};
@@ -4208,15 +4241,20 @@ function addXP(n,reason){
   }
   snd("success");
   save();
-  const targetUid=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||getMyUid();
-  if(window.db&&window.setDoc&&window.doc&&targetUid&&targetUid!=="me"){
-    window.setDoc(window.doc(window.db,"users",targetUid),{
-      level:S.me.level,
-      xp:S.me.xp,
-      xpNext:S.me.xpNext,
-      updatedAt:Date.now()
-    },{merge:true}).catch(()=>{});
-  }
+  window.economyServerCall("economyAdjust", {
+    op: "adjust", currency: "xp", amount: n, reason: reason || "",
+    idempotencyKey: window.__economyIdemKey("xp")
+  }).then(function(res) {
+    window.__economyMarkServerResult(res);
+    // السيرفر مصدر الحقيقة للمستوى — نطابق المحلي بنتيجته الفعلية
+    if (res && res.data && res.data.levels) {
+      var L = res.data.levels;
+      if (typeof L.xp === "number") { S.me.xp = L.xp; }
+      if (typeof L.level === "number") { S.me.level = L.level; }
+      if (typeof L.xpNext === "number") { S.me.xpNext = L.xpNext; }
+      save();
+    }
+  }).catch(function(err) { window.__economyMarkLocalDemo(err); });
 }
 window.awardXP = addXP;
 window.addXP = addXP;
@@ -15623,7 +15661,10 @@ function joinGroup(id){const g=(S.groups||[]).find(x=>x.id===id);
   if(g.privacy==="خاص"&&g.owner!=="me"&&g.owner!==getChatMyUid()){S.joinReqs=S.joinReqs||[];if(!S.joinReqs.some(r=>r.kind==="group"&&r.id===id&&r.uid==="me")){S.joinReqs.push({kind:"group",id:id,uid:"me",at:now()});save();toast("قروب خاص: أُرسل طلب انضمام للمشرفين","info");snd("send")}else toast("طلبك قيد المراجعة","info");render();return}
   g.joined=true;if(!g.members)g.members=[];if(!g.members.includes("me"))g.members.push("me");celebrate("انضممت إلى "+g.name+"");save();
   if(window.db && window.setDoc && window.doc){
-    window.setDoc(window.doc(window.db,"groups",g.id),{members:g.members,updatedAt:now()},{merge:true}).catch(e=>console.error(e));
+    const ju = (window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||null;
+    const upd = {members:g.members,updatedAt:now()};
+    if(ju && window.arrayUnion) upd.memberUids = window.arrayUnion(ju);   // عضوية حقيقية للقواعد المحصّنة
+    window.setDoc(window.doc(window.db,"groups",g.id),upd,{merge:true}).catch(e=>console.error(e));
   }
   render()}
 
@@ -15737,7 +15778,7 @@ function groupPromote(gid,mid){const g=(S.groups||[]).find(x=>x.id===gid);if(!g)
 function groupInvite(gid,uid2){const g=(S.groups||[]).find(x=>x.id===gid);if(g.members.includes(uid2))return;g.members.push(uid2);save();closeOvl();toast("انضم "+u(uid2).name+" إلى القروب","ok");snd("success");openSheet("groupMembers",gid)}
 function groupKick(gid,uid2){const g=(S.groups||[]).find(x=>x.id===gid);g.members=g.members.filter(m=>m!==uid2);g.admins=g.admins.filter(m=>m!==uid2);save();toast("أُزيل "+u(uid2).name+" من القروب","info");closeOvl();render()}
 function leaveCommunity(id){const c=(S.communities||[]).find(x=>x.id===id);if(!c)return;if(!confirm("مغادرة "+c.name+"؟"))return;c.joined=false;c.rank="—";c.members=Math.max(0,(c.members||1)-1);save();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"communities",c.id),{members:c.members,updatedAt:now()},{merge:true}).catch(e=>console.error(e));}render();toast("غادرت المجتمع","info")}
-function leaveGroup(id){const g=(S.groups||[]).find(x=>x.id===id);if(!g)return;if(!confirm("مغادرة "+g.name+"؟"))return;g.joined=false;g.members=(g.members||[]).filter(m=>m!=="me");save();closeOvl();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"groups",g.id),{members:g.members,updatedAt:now()},{merge:true}).catch(e=>console.error(e));}go("chat");S.chatMode="communities";S.comFilter="groups";render();toast("غادرت القروب","info")}
+function leaveGroup(id){const g=(S.groups||[]).find(x=>x.id===id);if(!g)return;if(!confirm("مغادرة "+g.name+"؟"))return;g.joined=false;g.members=(g.members||[]).filter(m=>m!=="me");save();closeOvl();if(window.db&&window.setDoc&&window.doc){const lu=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||null;const upd={members:g.members,updatedAt:now()};if(lu&&window.arrayRemove)upd.memberUids=window.arrayRemove(lu);window.setDoc(window.doc(window.db,"groups",g.id),upd,{merge:true}).catch(e=>console.error(e));}go("chat");S.chatMode="communities";S.comFilter="groups";render();toast("غادرت القروب","info")}
 function deleteGroup(id){const g=(S.groups||[]).find(x=>x.id===id);if(!confirm("حذف "+g.name+" نهائياً؟"))return;
   if(window.db && window.deleteDoc && window.doc) {
     window.deleteDoc(window.doc(window.db, "groups", id)).catch(e => console.warn(e));
@@ -15970,9 +16011,9 @@ window.listenWorldMessages = function(wid) {
   }
 };
 
-function joinWorld(id){const w=(S.worlds||[]).find(x=>x.id===id);if(!w)return;w.joined=true;w.members=(w.members||0)+1;celebrate("انضممت إلى "+w.name+"");save();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"worlds",w.id),{members:w.members,updatedAt:now()},{merge:true}).catch(e=>console.error(e));}render()}
+function joinWorld(id){const w=(S.worlds||[]).find(x=>x.id===id);if(!w)return;w.joined=true;w.members=(w.members||0)+1;celebrate("انضممت إلى "+w.name+"");save();if(window.db&&window.setDoc&&window.doc){const wu=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||null;const upd={members:w.members,updatedAt:now()};if(wu&&window.arrayUnion)upd.memberUids=window.arrayUnion(wu);window.setDoc(window.doc(window.db,"worlds",w.id),upd,{merge:true}).catch(e=>console.error(e));}render()}
 function worldPin(id){const w=(S.worlds||[]).find(x=>x.id===id);if(!w)return;w.pinned=w.pinned?null:((w.msgs[w.msgs.length-1]||{}).text||"إعلان العالم");save();closeOvl();render();toast(w.pinned?"ثُبّت الإعلان أعلى العالم":"أُلغي التثبيت","info")}
-function leaveWorld(id){const w=(S.worlds||[]).find(x=>x.id===id);if(!w)return;if(!confirm("مغادرة "+w.name+"؟"))return;w.joined=false;w.members=Math.max(0,(w.members||1)-1);save();closeOvl();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"worlds",w.id),{members:w.members,updatedAt:now()},{merge:true}).catch(e=>console.error(e));}go("chat");S.chatMode="communities";S.comFilter="worlds";render();toast("غادرت العالم","info")}
+function leaveWorld(id){const w=(S.worlds||[]).find(x=>x.id===id);if(!w)return;if(!confirm("مغادرة "+w.name+"؟"))return;w.joined=false;w.members=Math.max(0,(w.members||1)-1);save();closeOvl();if(window.db&&window.setDoc&&window.doc){const lu=(window.auth&&window.auth.currentUser&&window.auth.currentUser.uid)||null;const upd={members:w.members,updatedAt:now()};if(lu&&window.arrayRemove)upd.memberUids=window.arrayRemove(lu);window.setDoc(window.doc(window.db,"worlds",w.id),upd,{merge:true}).catch(e=>console.error(e));}go("chat");S.chatMode="communities";S.comFilter="worlds";render();toast("غادرت العالم","info")}
 
 function sendWorldMsg(id){const w=(S.worlds||[]).find(x=>x.id===id);const i=$("#win");if(!w||!i)return;const t=(i.value||"").trim();if(!t)return;
   if(t.startsWith("/")){i.value="";i.style.height="auto";if(applyRoomCmd(t,w,"world"))return}
@@ -21152,12 +21193,28 @@ function addCoinsTo(uidv,amt,reason){
   if(uidv==="me" || isMe(uidv)){ addCoins(amt,reason); return; }
   const x = u(uidv);
   if(x){
+    // لا كتابة مباشرة لرصيد مستخدم آخر من العميل إطلاقاً — عبر الدالة السحابية فقط
+    const myUid = getMyUid();
+    const targetIsCloud = !!(myUid && myUid !== "me" && myUid !== "guest" && uidv && uidv !== "me" && !String(uidv).startsWith("u"));
+    if (targetIsCloud) {
+      window.economyServerCall("economyTransfer", {
+        op: "transfer", currency: "coins", amount: amt, toUid: uidv, note: reason || "",
+        idempotencyKey: window.__economyIdemKey("transfer")
+      }).then(function(res) {
+        window.__economyMarkServerResult(res);
+        toast("أُضيفت " + nfmt(amt) + " عملة عبر السيرفر الموثوق", "ok");
+        render();
+      }).catch(function(err) {
+        window.__economyMarkLocalDemo(err);
+        toast("إضافة العملات لحساب سحابي تتطلب الدوال السحابية (لم تُنشر بعد)", "err");
+      });
+      return;
+    }
+    // عرض محلي تجريبي فقط (مستخدمو العرض) — لا ادعاء مزامنة
     x.coins = (x.coins || x.wallet || 0) + amt;
     x.wallet = x.coins;
     save();
-    if(window.db && window.setDoc && window.doc && x.id){
-      window.setDoc(window.doc(window.db, "users", x.id), { coins: x.coins, wallet: x.wallet, updatedAt: Date.now() }, {merge: true}).catch(()=>{});
-    }
+    render();
   }
 }
 
@@ -21182,28 +21239,38 @@ window.transferCoinsToUser = function(targetUserId, amount, note) {
     return false;
   }
 
-  // Deduct from sender
+  // جلسة سحابية حقيقية؟ التحويل عبر الدالة السحابية فقط (معاملة واحدة ذرّية على السيرفر)
+  const myUid = getMyUid();
+  if (window.__hasServerIdentity()) {
+    window.economyServerCall("economyTransfer", {
+      op: "transfer", currency: "coins", amount: amount, toUid: targetUser.id, note: note || "",
+      idempotencyKey: window.__economyIdemKey("transfer")
+    }).then(function(res) {
+      window.__economyMarkServerResult(res);
+      if (res && res.data && typeof res.data.senderBalance === "number") {
+        S.coins = res.data.senderBalance;
+        if (S.me) { S.me.coins = S.coins; S.me.wallet = S.coins; }
+      }
+      save(); render();
+      toast("تم التحويل عبر السيرفر الموثوق: " + nfmt(amount) + " عملة", "ok");
+      snd("success");
+    }).catch(function(err) {
+      window.__economyMarkLocalDemo(err);
+      toast("فشل التحويل — رصيدك لم يتغير. يتطلب التحويل السحابي نشر الدوال (Cloud Functions)", "err");
+      snd("error");
+    });
+    return true;
+  }
+
+  // وضع محلي تجريبي (بلا جلسة سحابية): تحويل عرض محلي معلَن — لا كتابة سحابية إطلاقاً
   S.coins = (S.coins || 0) - amount;
   if (!S.me) S.me = {};
   S.me.coins = S.coins;
   S.me.wallet = S.coins;
-
-  // Add to recipient
   targetUser.coins = (targetUser.coins || targetUser.wallet || 0) + amount;
   targetUser.wallet = targetUser.coins;
-
   save();
-
-  // Firestore sync for sender
-  const myUid = getMyUid();
-  if (window.db && window.setDoc && window.doc && myUid && myUid !== "me") {
-    window.setDoc(window.doc(window.db, "users", myUid), { coins: S.coins, wallet: S.coins, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-  }
-
-  // Firestore sync for recipient
-  if (window.db && window.setDoc && window.doc && targetUser.id) {
-    window.setDoc(window.doc(window.db, "users", targetUser.id), { coins: targetUser.coins, wallet: targetUser.wallet, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-  }
+  toast("تحويل تجريبي محلي (بلا سيرفر) — لن يُحتسب عند تفعيل الحساب السحابي", "info");
 
   // Generate notification for recipient
   if (typeof addNotif === "function") {
@@ -23370,14 +23437,17 @@ PAGES.syncDiag = function(){
   (S.groups || []).forEach(g => (g.msgs || []).forEach(m => { if (m && (m.pending || m.failed)) pendingMsgs++; }));
   (S.worlds || []).forEach(w => (w.msgs || []).forEach(m => { if (m && (m.pending || m.failed)) pendingMsgs++; }));
 
-  const statusColor = { active: "b-emerald", retrying: "b-gold", failed: "b-red", pending: "b-cyan", stopped: "" };
+  const statusColor = { active: "b-emerald", retrying: "b-gold", failed: "b-red", pending: "b-cyan", stopped: "", paused: "b-gray", queued: "b-gold" };
   const statCard = (label, val, cls) => '<div class="card" style="padding:10px;text-align:center"><div class="tiny fnt">' + label + '</div><div class="b ' + (cls||'') + '" style="font-size:20px;margin-top:4px">' + val + '</div></div>';
 
+  const queue = window.RTSM.getQueue ? window.RTSM.getQueue() : [];
   const listenersHtml = listeners.map(l =>
 '<tr style="border-bottom:1px solid var(--line)">' +
-'<td style="padding:6px 4px" class="tiny mono">' + esc(l.id.replace("lsn:","")) + '</td>' +
+'<td style="padding:6px 4px" class="tiny mono" dir="ltr">' + esc(l.path || String(l.id).replace("lsn:","")) + '</td>' +
+'<td style="padding:6px 4px"><span class="badge tiny" style="background:var(--surface3)">' + esc(l.owner || "other") + '</span></td>' +
 '<td style="padding:6px 4px"><span class="badge ' + (statusColor[l.status]||'') + ' tiny">' + l.status + '</span></td>' +
-'<td style="padding:6px 4px" class="tiny">' + (l.scoped === "user" ? "" : "") + '</td>' +
+'<td style="padding:6px 4px" class="tiny mono" title="' + esc(l.fingerprint || "") + '">' + esc(String(l.fingerprint || "").slice(0,6)) + '</td>' +
+'<td style="padding:6px 4px" class="tiny">' + (l.unsubState === "attached" ? "مربوط" : esc(l.unsubState)) + '</td>' +
 '<td style="padding:6px 4px" class="tiny">' + l.retryCount + '</td>' +
 '<td style="padding:6px 4px" class="tiny">' + __agoAr(l.lastSnapshotAt) + '</td>' +
 '<td style="padding:6px 4px" class="tiny" style="color:var(--rose)">' + (l.lastError ? esc(l.lastError.code) : "—") + '</td>' +
@@ -23413,6 +23483,12 @@ PAGES.syncDiag = function(){
       statCard("إجمالي محاولات الإعادة", st.totalRetryCount, "") +
 '</div>' +
 '<div class="grid2" style="gap:8px">' +
+      statCard("سقف المستمعات (حاجز أمان)", st.activeCount + " / " + st.listenerCap, st.activeCount >= st.listenerCap ? "b-red" : "") +
+      statCard("في طابور الانتظار", st.queueLength, st.queueLength ? "b-gold" : "") +
+      statCard("مرات بلوغ الحاجز", st.guardrailHits || 0, (st.guardrailHits||0) ? "b-gold" : "") +
+      statCard("متوقفة مؤقتاً (pause)", st.byStatus.paused || 0, "") +
+'</div>' +
+'<div class="grid2" style="gap:8px">' +
       statCard("آخر لقطة سحابية", __agoAr(st.lastSnapshotAt), "") +
       statCard("آخر كتابة", st.lastWrite ? ((st.lastWrite.ok ? "" : "") + __agoAr(st.lastWrite.at)) : "—", st.lastWrite && st.lastWrite.ok ? "b-emerald" : (st.lastWrite ? "b-red" : "")) +
       statCard("منشورات بانتظار المزامنة", pendingPosts, pendingPosts ? "b-gold" : "") +
@@ -23421,8 +23497,9 @@ PAGES.syncDiag = function(){
 '<div class="card" style="padding:12px">' +
 '<div class="b sm" style="margin-bottom:8px"> المستمعات الحية (' + listeners.length +')</div>' +
 '<div style="overflow-x:auto"><table style="width:100%;min-width:560px;border-collapse:collapse">' +
-'<thead><tr class="tiny fnt" style="text-align:right"><th style="padding:6px 4px">المسار</th><th>الحالة</th><th>النطاق</th><th>إعادات</th><th>آخر لقطة</th><th>آخر خطأ</th></tr></thead>' +
-'<tbody>' + (listenersHtml || '<tr><td colspan="6" class="tiny fnt" style="padding:10px">لا مستمعات</td></tr>') + '</tbody></table></div>' +
+'<thead><tr class="tiny fnt" style="text-align:right"><th style="padding:6px 4px">المسار</th><th>المالك</th><th>الحالة</th><th>البصمة</th><th>الاشتراك</th><th>إعادات</th><th>آخر لقطة</th><th>آخر خطأ</th></tr></thead>' +
+'<tbody>' + (listenersHtml || '<tr><td colspan="8" class="tiny fnt" style="padding:10px">لا مستمعات</td></tr>') + '</tbody></table></div>' +
+(queue.length ? '<div class="tiny" style="margin-top:8px;color:var(--gold)">في طابور الانتظار (' + queue.length + '): ' + queue.map(function(q){ return esc(q.path + " ← " + (q.owner||"other")); }).join(" · ") + '</div>' : '') +
 '</div>' +
 '<div class="card" style="padding:12px">' +
 '<div class="b sm" style="margin-bottom:8px"> سجل الكتابات (آخر ' + writeLog.length +')</div>' +
@@ -23434,6 +23511,24 @@ PAGES.syncDiag = function(){
 '<div class="b sm" style="margin-bottom:8px"> نبض الأحداث الحية</div>' +
       (eventsHtml || '<div class="tiny fnt">لا أحداث بعد</div>') +
 '</div>' +
+'<div class="card" style="padding:12px">' +
+'<div class="b sm" style="margin-bottom:8px">' + I("checks","i s") + ' قائمة تحقق المزامنة الحية A→B (على جهازين/حسابين حقيقيين)</div>' +
+'<div class="tiny fnt" style="margin-bottom:8px">نفّذ الخطوات على جهازين بحسابين مسجّلين — النتيجة الصحيحة مذكورة لكل خطوة. أي خطوة تخالف النتيجة = عطل يجب إبلاغه.</div>' +
+'<div class="col tiny" style="gap:5px">' +
+['أرسل رسالة خاصة من الجهاز A → يجب أن تصل فوراً على B دون تحديث الصفحة',
+ 'ردّ B على الرسالة → تصل فوراً على A ويُحدَّث إيصال القراءة',
+ 'أنشئ/عدّل/احذف منشوراً من A → يظهر التغيير الصحيح على B',
+ 'تعليق أو تفاعل من B → يظهر على A مع العدّاد الصحيح',
+ 'غيّر صورة ملفك من A → تظهر للمشاهدين المسموح لهم على B',
+ 'أرسل رسالة قروب → تصل لكل الأعضاء المتصلين',
+ 'اقطع الإنترنت ثم أعده → كل المستمعات تعود active تلقائياً (راقب الجدول أعلاه)',
+ 'أخفِ التطبيق ثم عُد إليه → لا تُفقد أي رسالة جديدة',
+ 'سجّل الخروج ثم الدخول → مستمعات الحساب تُلغى ثم تُعاد دون تسريب بين الحسابات',
+ 'بدّل الحساب A→B→A → لا تظهر بيانات حساب في جلسة الآخر',
+ 'افتح تبويباً/جهازاً ثانياً → نفس الحالة لحظياً في كليهما',
+ 'راقب هذا الجدول أثناء كل خطوة: أي مستمع failed لمدة أطول من دقيقة = عطل'
+].map(function(t, i){ return '<div class="row" style="gap:6px"><span class="mono" style="width:16px">' + (i+1) + '</span><span>' + esc(t) + '</span></div>'; }).join("") +
+'</div></div>' +
 '<div class="card" style="padding:12px">' +
 '<div class="b sm" style="margin-bottom:8px"> معلومات الجلسة</div>' +
 '<div class="col tiny" style="gap:5px">' +
@@ -23482,7 +23577,8 @@ boot();
 </script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-  import { initializeFirestore, getFirestore, doc, setDoc, updateDoc, addDoc, serverTimestamp, getDoc, getDocFromServer, collection, query, where, orderBy, limit, startAfter, getDocs, onSnapshot, deleteDoc, enableMultiTabIndexedDbPersistence, setLogLevel, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+  import { initializeFirestore, getFirestore, doc, setDoc, updateDoc, addDoc, serverTimestamp, getDoc, getDocFromServer, collection, query, where, orderBy, limit, startAfter, getDocs, onSnapshot, deleteDoc, enableMultiTabIndexedDbPersistence, setLogLevel, enableNetwork, disableNetwork, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-functions.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, RecaptchaVerifier, signInWithPhoneNumber, deleteUser, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
   import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
 
@@ -23495,6 +23591,19 @@ boot();
     window.__FB_DEBUG = __fbDebug;
   } catch (_) {}
   window.getStorage = getStorage;
+  window.getFunctions = getFunctions;
+  window.httpsCallable = httpsCallable;
+  window.arrayUnion = arrayUnion;
+  window.arrayRemove = arrayRemove;
+  /** استدعاء دالة سحابية موثوقة (Cloud Function) — السلطة للسيرفر */
+  window.__callCloudFunction = function(name, data) {
+    try {
+      if (!app || !getFunctions || !httpsCallable) return Promise.reject({ code: "functions/unavailable", message: "functions bridge not ready" });
+      return httpsCallable(getFunctions(app, "us-central1"), name)(data || {});
+    } catch (e) {
+      return Promise.reject({ code: "functions/unavailable", message: String((e && e.message) || e) });
+    }
+  };
   window.ref = ref;
   window.uploadBytes = uploadBytes;
   window.uploadBytesResumable = uploadBytesResumable;
@@ -23552,7 +23661,8 @@ boot();
   window.__rtmLastFailToastAt = 0;
   window.__rtmOnEvent = function(type, rec, err, extra, entry) {
     // لا نخفي أي خطأ بعد الآن: أحداث المستمعات تُسجَّل بنيوياً وبدون كتم
-    if (type === 'listener_retry' || type === 'listener_failed' || type === 'listener_evicted') {
+    if (type === 'listener_retry' || type === 'listener_failed' || type === 'listener_evicted' ||
+        type === 'guardrail_reached' || type === 'guardrail_rejected') {
       console.error("[RTSM:" + type +"]", rec ? rec.id : '', extra || '', (err && err.code) || '', (err && err.message) || '');
     } else if (window.__FB_DEBUG) {
       console.log("[RTSM:" + type +"]", rec ? rec.id : '', extra || '');
@@ -23569,9 +23679,22 @@ boot();
       // خطة الإنقاذ: إذا كانت قاعدة البيانات المسماة غير موجودة على السيرفر ننتقل للافتراضية مرة واحدة
       try { window.__firestoreDbFallback(err); } catch (_) {}
     }
+    // حاجز المستمعات: يُعلن صراحة مع المالك والسبب — لا إسكات ولا إخلاء صامت
+    if (type === 'guardrail_reached' || type === 'guardrail_rejected') {
+      const nowMs2 = Date.now();
+      if (nowMs2 - (window.__rtmLastGuardrailToastAt || 0) > 60000) {
+        window.__rtmLastGuardrailToastAt = nowMs2;
+        try {
+          if (typeof toast === "function") {
+            toast((type === 'guardrail_rejected' ? "اكتمل طابور المزامنة — رُفض اشتراك " : "بلوغ سقف المستمعات — أُجّل اشتراك ") +
+              String((extra && extra.owner) || (rec && rec.owner) || "غير معروف") + " (" + String((extra && extra.reason) || "listener-cap") + ")", "warn");
+          }
+        } catch (_) {}
+      }
+    }
     // تحديث واجهة التشخيص إن كانت مفتوحة
     try {
-      if (S && S.page === "syncDiag" && (type === 'listener_failed' || type === 'write_failed' || type === 'backend' || type === 'batch_resubscribe')) {
+      if (S && S.page === "syncDiag" && (type === 'listener_failed' || type === 'write_failed' || type === 'backend' || type === 'batch_resubscribe' || type === 'guardrail_reached')) {
         debounceRender({ keepScroll: true });
       }
     } catch (_) {}
@@ -23663,6 +23786,26 @@ boot();
     return null;
   };
 
+  /** المالك/الميزة صاحبة المستمع — يُستنتج من المسار لدورة حياة وتشخيص أدق */
+  window.__rtmInferOwner = function(p) {
+    if (!p || typeof p !== "string") return "unknown";
+    if (p === "chats" || p.indexOf("chats/") === 0) return "chats";
+    if (p.indexOf("users/") === 0) return "users";
+    if (p === "posts" || p.indexOf("posts/") === 0) return "posts";
+    if (p.indexOf("groups/") === 0) return "groups";
+    if (p.indexOf("worlds/") === 0) return "worlds";
+    if (p.indexOf("communities/") === 0) return "communities";
+    if (p === "notifications" || p.indexOf("notifications/") === 0) return "notifications";
+    if (p.indexOf("user_states/") === 0) return "user-state";
+    if (p.indexOf("workspaces/") === 0) return "workspace";
+    if (p.indexOf("stories/") === 0) return "stories";
+    if (p.indexOf("reels/") === 0) return "reels";
+    if (p.indexOf("sys/") === 0) return "canary";
+    if (p.indexOf("app_visual_config") === 0) return "visual-config";
+    if (p.indexOf("badges/") === 0 || p.indexOf("level_badges/") === 0 || p.indexOf("badge_assignments/") === 0) return "badges";
+    return "other";
+  };
+
   /** كل استدعاءات onSnapshot في التطبيق تمر عبر المدير المركزي */
   window.onSnapshot = function(ref, ...args) {
     const p = (ref && (ref.path || (ref._query && ref._query.path && ref._query.path.canonicalString()))) || null;
@@ -23684,10 +23827,17 @@ boot();
       if (origErrFn) { try { origErrFn(err); } catch (_) {} }
     };
     if (window.RTSM && nextFn) {
+      // هوية المستمع = بصمة الاستعلام الكاملة (مسار + مرشحات + ترتيب + حد) + المالك
+      // استعلامات مختلفة على نفس المسار لا تحل محل بعضها أبداً
+      let descriptor = null;
+      try {
+        if (window.RTSM.describeQuery) descriptor = window.RTSM.describeQuery(ref);
+      } catch (_) { descriptor = null; }
       return window.RTSM.subscribe({
-        id: "lsn:" + (p || "unknown"),
         path: p,
         ref: ref,
+        descriptor: descriptor,
+        owner: window.__rtmInferOwner(p),
         next: nextFn,
         error: rtsmErrHandler,
         listenOptions: listenOptions,

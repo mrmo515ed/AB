@@ -75,7 +75,7 @@ function makeSandbox() {
     ago: () => "الآن",
     linkify: (t: string) => t,
     hhmm: () => "12:00",
-    msgById: (id: string) => sandbox.__msgs.find((m: { id: string }) => m.id === id),
+    msgById: (id: string) => (sandbox.__msgs as Array<{ id: string }>).find((m) => m.id === id),
     closeOvl: () => calls.push("closeOvl"),
     $: () => null,
     esc: (t: string) => String(t),
@@ -149,8 +149,8 @@ describe("task-3: applyRoomCmd (slash commands for groups & worlds)", () => {
   });
 
   it("/topic is admin-only and updates the topic", () => {
-    const memberRoom = { msgs: [] as unknown[], owner: "u9" };
-    const adminRoom = { msgs: [] as unknown[], owner: "me" };
+    const memberRoom: { msgs: unknown[]; owner: string; desc?: string } = { msgs: [], owner: "u9" };
+    const adminRoom: { msgs: unknown[]; owner: string; desc?: string } = { msgs: [], owner: "me" };
     const { exports } = runInSandbox(PRELUDE);
     expect(exports.applyRoomCmd("/topic موضوع جديد", memberRoom, "world")).toBe(true);
     expect(memberRoom.msgs).toHaveLength(0); // blocked
@@ -193,10 +193,10 @@ describe("task-3: room reactions", () => {
     const code = PRELUDE + `__msgs = [{ id: "r1", uid: "u2", text: "مرحبا" }]; msgById = (id) => __msgs.find(m => m.id === id);`;
     const { sandbox, exports } = runInSandbox(code);
     (exports.roomReact as (id: string, k: string) => void)("r1", "love");
-    const m1 = (sandbox.__msgs as { reacts: Record<string, string[]> }[])[0];
+    const m1 = (sandbox.__msgs as Array<{ reacts: Record<string, string[]> }>)[0];
     expect(m1.reacts.love).toEqual(["me"]);
     (exports.roomReact as (id: string, k: string) => void)("r1", "love");
-    const m2 = (sandbox.__msgs as { reacts: Record<string, string[]> }[])[0];
+    const m2 = (sandbox.__msgs as Array<{ reacts: Record<string, string[]> }>)[0];
     expect(m2.reacts.love).toEqual([]);
   });
 });

@@ -219,7 +219,7 @@ describe('RealtimeSyncManager — إعادة المحاولة والتعافي',
     expect(mgr.getListener('hb')!.status).toBe('active');
   });
 
-  it('سقف المستمعات: عند بلوغ الحد يُستبدل الأقدم ولا يتجاوز العدد', () => {
+  it('سقف المستمعات (v2): حاجز أمان بلا إخلاء — الاشتراك الزائد يصطف وينتظر تحرر مقعد', () => {
     const store = new FakeFirestore();
     const mgr = new RealtimeSyncManager({
       subscribe: (ref: any, next: any, err: any) => store.subscribe(ref.path, next, err),
@@ -228,10 +228,24 @@ describe('RealtimeSyncManager — إعادة المحاولة والتعافي',
     mgr.subscribe({ id: 'l1', ref: { path: 'a' }, next: () => {} });
     mgr.subscribe({ id: 'l2', ref: { path: 'b' }, next: () => {} });
     mgr.subscribe({ id: 'l3', ref: { path: 'c' }, next: () => {} });
-    mgr.subscribe({ id: 'l4', ref: { path: 'd' }, next: () => {} });
-    expect(mgr.getStats().total).toBe(3);
-    expect(mgr.getListener('l1')).toBeNull(); // الأزل استُبدل
-    expect(mgr.getListener('l4')).toBeTruthy();
+    const unsub4 = mgr.subscribe({ id: 'l4', ref: { path: 'd' }, next: () => {} });
+    // لا إخلاء: المستمعات الثلاثة الأصلية حية، والرابع في الطابور
+    expect(mgr.getStats().activeCount).toBe(3);
+    expect(mgr.getStats().queueLength).toBe(1);
+    expect(mgr.getListener('l1')).not.toBeNull();      // لم يُإخلأ
+    expect(mgr.getListener('l4')).not.toBeNull();      // مسجل (queued)
+    expect(mgr.getListener('l4')!.status).toBe('queued');
+    expect(mgr.getStats().guardrailHits).toBe(1);
+    // تحرير مقعد → يبدأ المنتظر فوراً
+    mgr.unsubscribe('l1');
+    expect(mgr.getStats().queueLength).toBe(0);
+    expect(mgr.getListener('l4')!.status).toBe('active');
+    // إلغاء اشتراك لا يزال منتظراً يعمل بأمان
+    const mgr2 = new RealtimeSyncManager({ subscribe: (r: any, n: any, e: any) => store.subscribe(r.path, n, e), maxListeners: 1 });
+    mgr2.subscribe({ id: 'q1', ref: { path: 'x' }, next: () => {} });
+    const un = mgr2.subscribe({ id: 'q2', ref: { path: 'y' }, next: () => {} });
+    expect(() => un()).not.toThrow();
+    expect(mgr2.getStats().queueLength).toBe(0);
   });
 });
 
