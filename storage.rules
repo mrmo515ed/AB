@@ -10,75 +10,133 @@ service firebase.storage {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // مشرف موثوق: بريد المالك أو claim إداري يضبطه السيرفر فقط (Admin SDK)
+    function isTrustedUploader() {
+      return isSignedIn() && (
+        request.auth.token.email == 'm774545471@gmail.com' ||
+        request.auth.token.admin == true ||
+        request.auth.token.appRole == 'admin'
+      );
+    }
+
     function isImage() {
-      return request.resource.contentType.matches('image/.*');
+      return request.resource.contentType is string && request.resource.contentType.matches('image/(jpeg|png|webp|gif|avif)');
     }
 
     function isVideo() {
-      return request.resource.contentType.matches('video/.*');
+      return request.resource.contentType is string && request.resource.contentType.matches('video/(mp4|webm|quicktime)');
     }
 
     function isAudio() {
-      return request.resource.contentType.matches('audio/.*');
+      return request.resource.contentType is string &&
+        (request.resource.contentType.matches('audio/(mpeg|mp4|ogg|wav|webm)') ||
+         request.resource.contentType == 'audio/webm;codecs=opus');
     }
 
     function isMedia() {
       return isImage() || isVideo() || isAudio();
     }
 
-    // User avatars, covers, profile voice notes
+    // مسار آمن: بلا اجتياز مجلدات، وبطول معقول
+    function isSafeName() {
+      return request.resource.name.size() > 0 &&
+             request.resource.name.size() < 300 &&
+             !request.resource.name.contains('..') &&
+             !request.resource.name.contains('//');
+    }
+
+    // حجم قياسي لكل نوع
+    function fitsImage() { return request.resource.size > 0 && request.resource.size < 15 * 1024 * 1024; }
+    function fitsAudio() { return request.resource.size > 0 && request.resource.size < 25 * 1024 * 1024; }
+    function fitsChatMedia() { return request.resource.size > 0 && request.resource.size < 30 * 1024 * 1024; }
+    function fitsPostMedia() { return request.resource.size > 0 && request.resource.size < 50 * 1024 * 1024; }
+    function fitsReel() { return request.resource.size > 0 && request.resource.size < 150 * 1024 * 1024; }
+
+    // ============================================================
+    // وسائط المستخدم: الصور الرمزية والأغلفة ووسائط منشوراته
+    // (مسار الرفع الفعلي للتطبيق: users/{uid}/posts/{ts}_{rand}.{ext})
+    // القراءة عامة (محتوى منشورات عام) — الكتابة للمالك فقط وبقيود
+    // ============================================================
     match /users/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(userId) && request.resource.size < 15 * 1024 * 1024 && isMedia();
+      allow write: if isOwner(userId) && isSafeName() && (
+        (isImage() && fitsImage()) ||
+        (isVideo() && fitsPostMedia()) ||
+        (isAudio() && fitsAudio())
+      );
       allow delete: if isOwner(userId);
     }
 
-    // Posts media attachments
+    // ============================================================
+    // Posts media attachments — عامة القراءة، رفع المالك فقط
+    // ============================================================
     match /posts/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isOwner(userId) && request.resource.size < 50 * 1024 * 1024 && isMedia();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsPostMedia();
       allow delete: if isOwner(userId);
     }
 
+    // ============================================================
     // Stories (24h ephemeral media)
+    // ============================================================
     match /stories/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isOwner(userId) && request.resource.size < 50 * 1024 * 1024 && isMedia();
+      allow write: if isOwner(userId) && isSafeName() && (isImage() || isVideo()) && fitsChatMedia();
       allow delete: if isOwner(userId);
     }
 
+    // ============================================================
     // Reels (short videos)
+    // ============================================================
     match /reels/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024 && isVideo();
+      allow write: if isOwner(userId) && isSafeName() && isVideo() && fitsReel();
       allow delete: if isOwner(userId);
     }
 
-    // Direct chat media attachments
+    // ============================================================
+    // Direct chat media — الرفع للمرسل فقط (مسار يحوي معرّفه)
+    // ------------------------------------------------------------
+    // حد معروف وموثّق: قواعد التخزين لا تستطيع التحقق من عضوية
+    // المحادثة (قراءة Firestore عبر القواعد لا تدعم القاعدة المسماة
+    // ai-studio التي يستخدمها التطبيق) — لذلك القراءة للموقّعين فقط،
+    // والطريق الموثوق لعرض الوسائط الخاصة هو دالة getChatMediaUrl
+    // (Signed URL مع تحقق عضوية على السيرفر) في Cloud Functions.
+    // ============================================================
     match /chats/{chatId}/{userId}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
       allow delete: if isOwner(userId);
     }
 
-    // Group chat media attachments
+    // ============================================================
+    // Group chat media — الرفع للعضو المرسل فقط (مساره يحوي معرّفه)
+    // (نفس الحد الموثّق أعلاه بالنسبة للتحقق من العضوية)
+    // ============================================================
     match /groups/{groupId}/{userId}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
       allow delete: if isOwner(userId);
     }
 
-    // Community media attachments
+    // ============================================================
+    // Community media — القراءة للموقّعين فقط (كانت عامة للجميع!)
+    // ============================================================
     match /communities/{communityId}/{userId}/{fileName} {
-      allow read: if true;
-      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
       allow delete: if isOwner(userId);
     }
 
-    // Universal public assets & badges
+    // ============================================================
+    // Universal public assets & badges — رفع موثوق فقط (كان أي
+    // موقع يستطيع الرفع!) — الإدارة أو claim إداري من السيرفر
+    // ============================================================
     match /assets/{allPaths=**} {
       allow read: if true;
-      allow write: if isSignedIn() && request.resource.size < 10 * 1024 * 1024 && isMedia();
+      allow write: if isTrustedUploader() && isSafeName() &&
+        ((isImage() && fitsImage()) || (isVideo() && fitsPostMedia()));
+      allow delete: if isTrustedUploader();
     }
 
     // Default Deny for anything else

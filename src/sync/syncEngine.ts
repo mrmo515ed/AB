@@ -17,7 +17,7 @@ import {
   DocumentData,
   Unsubscribe
 } from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
+import { getDb } from '../config/firebase';
 import { observability } from '../services/observability';
 
 export interface SyncOptions<T> {
@@ -45,25 +45,43 @@ export class SyncEngine {
       this.activeListeners.delete(key);
     }
 
+    const wrapNext = (snapshot: any) => {
+      const items: T[] = [];
+      snapshot.forEach((docSnap: any) => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as T);
+      });
+      callback(items);
+    };
+    const wrapError = (error: any) => {
+      observability.captureError(error, { context: 'sync_listener_error', key });
+      if (onError) onError(error);
+    };
+
+    // مسار التطبيق الحقيقي: كل مستمع يمر عبر المدير المركزي window.RTSM (إن وُجد)
+    const hostRtsm = (typeof window !== 'undefined')
+      ? (window as any).RTSM
+      : null;
+    if (hostRtsm && typeof hostRtsm.subscribe === 'function') {
+      try {
+        const q = setupQuery();
+        const hostUnsub = hostRtsm.subscribe({
+          id: 'core:' + key,
+          ref: q,
+          next: wrapNext,
+          error: wrapError
+        });
+        const teardown = () => { try { hostUnsub(); } catch (_) { /* idempotent */ } };
+        this.activeListeners.set(key, teardown);
+        return teardown;
+      } catch (e) {
+        observability.captureError(e, { context: 'sync_setup_exception_host', key });
+      }
+    }
+
     try {
       const q = setupQuery();
-      const unsub = onSnapshot(
-        q,
-        (snapshot: any) => {
-          const items: T[] = [];
-          snapshot.forEach((docSnap: any) => {
-            items.push({ id: docSnap.id, ...docSnap.data() } as T);
-          });
-          callback(items);
-        },
-        (error: any) => {
-          observability.captureError(error, { context: 'sync_listener_error', key });
-          if (onError) onError(error);
-        }
-      );
-
+      const unsub = onSnapshot(q, wrapNext, wrapError);
       this.activeListeners.set(key, unsub);
-
       return () => {
         unsub();
         this.activeListeners.delete(key);
@@ -102,7 +120,7 @@ export class SyncEngine {
   ): Promise<{ items: T[]; hasMore: boolean }> {
     const start = performance.now();
     try {
-      const colRef = collection(db, collectionName);
+      const colRef = collection(getDb() as any, collectionName);
       let q = filterField && filterValue !== undefined
         ? query(colRef, where(filterField, '==', filterValue), orderBy(orderField, direction), limit(pageSize))
         : query(colRef, orderBy(orderField, direction), limit(pageSize));
@@ -167,7 +185,7 @@ export class SyncEngine {
 
     try {
       // 2. Commit to Firestore
-      const docRef = doc(db, collectionName, docId);
+      const docRef = doc(getDb() as any, collectionName, docId);
       await setDoc(docRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
     } catch (error) {
       // 3. Rollback on failure

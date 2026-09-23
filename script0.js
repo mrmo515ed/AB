@@ -1590,7 +1590,7 @@ PAGES.twofa=()=>authShell(`
       <button class="btn btn-sec btn-sm" onclick="showBackup()">${I("key","i s")} رموز احتياطية</button>
     </div>
   </div>`);
-function copyTxt(t){try{navigator.clipboard.writeText(t);toast("تم النسخ: "+t,"ok")}catch(e){toast("تعذّر النسخ","err")}}
+function copyTxt_v1(t){try{navigator.clipboard.writeText(t);toast("تم النسخ: "+t,"ok")}catch(e){toast("تعذّر النسخ","err")}}
 
 PAGES.terms=()=>{setHdr(backHdr("شروط الاستخدام","آخر تحديث: ٢٠٢٥/٠٩"));setNav(false);return `<div class="pad col">
   <div class="card" style="padding:15px"><div class="b sm grad-txt">١. قبول الشروط</div><p class="xs mut" style="margin-top:7px">باستخدامك منصة «أنمي بلاك» فإنك توافق على هذه الشروط بالكامل. إذا لم توافق على أي بند، يرجى التوقف عن استخدام المنصة.</p></div>
@@ -5250,7 +5250,7 @@ function stkPreviewCard(sk, idx){
   </div>`;
 }
 
-function saveStoryDraft(){
+function saveStoryDraftV1(){ /* نسخة أولى محفوظة — أُعيدت تسميتها لمنع تضارب التعريف مع saveStoryDraft v2 */
   const t = ($("#stxt") && $("#stxt").value.trim()) || S.storyDraftText || "";
   const d = {
     id: "drf_" + uid(),
@@ -5296,7 +5296,7 @@ function restoreStoryDraft(id){
   toast("تمت استعادة المسودة بنجاح 💫", "ok");
 }
 
-function delStoryDraft(id){
+function delStoryDraft_v1(id){
   S.storyDrafts = (S.storyDrafts || []).filter(x => x.id !== id);
   save();
   render();
@@ -7298,8 +7298,8 @@ function updateAchievements(){const m=S.me;const mine=getMyProfilePosts();
   const cond={ac1:mine.length>0,ac2:(m.badges||[]).length>=5,ac3:mine.reduce((a,p)=>a+(p.views||0),0)>=1e6,ac4:S.communities.some(c=>c.joined&&c.rank==="المؤسس"),ac6:S.coins>=10000};
   let nw=false;(S.achievements||[]).forEach(a=>{const c=cond[a.id];if(c===true&&!a.got){a.got=true;nw=true;setTimeout(()=>celebrate("إنجاز جديد: "+a.n+" "),50)}});
   if(nw)save()}
-function archivePost(id){(S.archived=S.archived||[]);if(!S.archived.includes(id))S.archived.push(id);save();render();snd("tap");toast("أُرشف المنشور في المستودع ","ok",()=>{S.archived=S.archived.filter(x=>x!==id);save();render();toast("أُعيد من الأرشيف ","ok")})}
-function unarchivePost(id){S.archived=(S.archived||[]).filter(x=>x!==id);save();render();toast("أُخرج المنشور من الأرشيف ","ok")}
+function archivePost_v1(id){(S.archived=S.archived||[]);if(!S.archived.includes(id))S.archived.push(id);save();render();snd("tap");toast("أُرشف المنشور في المستودع ","ok",()=>{S.archived=S.archived.filter(x=>x!==id);save();render();toast("أُعيد من الأرشيف ","ok")})}
+function unarchivePost_v1(id){S.archived=(S.archived||[]).filter(x=>x!==id);save();render();toast("أُخرج المنشور من الأرشيف ","ok")}
 function unhidePost(id){S.hidden=(S.hidden||[]).filter(x=>x!==id);save();render();toast("أُعيد إظهار المنشور ","ok")}
 function pickFrame(fid){const f=(S.frames||[]).find(x=>x.id===fid);if(!f)return;
   if(S.ownedFrames.includes(fid)){S.me.frame=S.me.frame===fid?null:fid;save();render();snd("tap");toast(S.me.frame?"إطار "+f.n+" مُفعّل ":"أُزيل الإطار من صورتك ","ok")}
@@ -8325,7 +8325,7 @@ PAGES.myPosts=()=>myPostsPage("posts");
 PAGES.hiddenPosts=()=>myPostsPage("hidden");
 PAGES.archivedPosts=()=>myPostsPage("archived");
 PAGES.myReplies=()=>myPostsPage("replies");
-function delPost(id){const idx=(S.posts||[]).findIndex(p=>p.id===id);if(idx<0)return;const snap=S.posts[idx];S.posts.splice(idx,1);S.me.saved=S.me.saved.filter(x=>x!==id);save();render();snd("error");if(window.db&&window.deleteDoc&&window.doc){window.deleteDoc(window.doc(window.db,"posts",id)).catch(e=>console.error(e))}toast("حُذف المنشور ","err",()=>{S.posts.splice(Math.min(idx,(S.posts||[]).length),0,snap);save();render();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"posts",id),snap).catch(e=>console.error(e))}toast("استُعيد المنشور ","ok")})}
+function delPost_v1(id){const idx=(S.posts||[]).findIndex(p=>p.id===id);if(idx<0)return;const snap=S.posts[idx];S.posts.splice(idx,1);S.me.saved=S.me.saved.filter(x=>x!==id);save();render();snd("error");if(window.db&&window.deleteDoc&&window.doc){window.deleteDoc(window.doc(window.db,"posts",id)).catch(e=>console.error(e))}toast("حُذف المنشور ","err",()=>{S.posts.splice(Math.min(idx,(S.posts||[]).length),0,snap);save();render();if(window.db&&window.setDoc&&window.doc){window.setDoc(window.doc(window.db,"posts",id),snap).catch(e=>console.error(e))}toast("استُعيد المنشور ","ok")})}
 PAGES.myGroups=()=>{setNav(false);setHdr(backHdr("النقابات والمجموعات",S.communities.filter(c=>c.joined).length+" منضم إليها"));
   return `<div class="pad col">
     <div class="grid3">${[["shield",S.communities.filter(c=>c.joined&&c.type==="guild").length,"نقابة"],["users",S.communities.filter(c=>c.joined&&c.type==="group").length,"مجموعة"],["globe",S.communities.filter(c=>c.joined&&c.type!=="guild"&&c.type!=="group").length,"أخرى"]].map(([ic,v,l])=>`<div class="card2 stat">${I(ic,"i s")}<b class="mono">${v}</b><span>${l}</span></div>`).join("")}</div>
