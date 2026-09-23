@@ -88,23 +88,25 @@ async function pushToUser(
 /* 1) الاقتصاد — سلطة السيرفر فقط                                */
 /* ============================================================ */
 
-/** تعديل رصيد المُتصل نفسه (دلتا موقّعة) داخل معاملة + منع إعادة تشغيل */
+/** تعديل رصيد المُتصل نفسه (إنفاق العميل دلتا سالبة فقط / الإضافة للأدمن فقط) داخل معاملة ذرّية */
 export const economyAdjust = onCall(async (request) => {
   const auth = request.auth;
-  const v = validateEconomyRequest(request.data, auth?.uid);
+  const isAdmin = isAdminAuth(auth);
+  const v = validateEconomyRequest(request.data, auth?.uid, isAdmin);
   if (!v.ok) throw new HttpsError('invalid-argument', v.error || 'invalid-request');
   const req = v.value!;
 
-  // منع إعادة التشغيل: مفتاح واحد = تنفيذ واحد
-  if (req.idempotencyKey) {
-    const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
-    const existing = await idemRef.get();
-    if (existing.exists) {
-      return existing.data() || { ok: true, replayed: true };
-    }
-  }
-
   const result = await db.runTransaction(async (tx) => {
+    // 1. فحص ذرّي لمنع التكرار (Idempotency) داخل نفس المعاملة لمنع أي سباق تزامني
+    if (req.idempotencyKey) {
+      const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
+      const existing = await tx.get(idemRef);
+      if (existing.exists) {
+        const cached = existing.data();
+        return (cached?.result as Record<string, unknown>) || { ok: true, replayed: true };
+      }
+    }
+
     const userRef = db.doc(`users/${auth!.uid}`);
     const snap = await tx.get(userRef);
     const data = snap.data() || {};
@@ -137,32 +139,44 @@ export const economyAdjust = onCall(async (request) => {
       at: Timestamp.now(),
       idempotencyKey: req.idempotencyKey
     });
-    return { ok: true, currency: req.currency, balance: next, levels: levels || null };
+
+    const txResult = { ok: true, currency: req.currency, balance: next, levels: levels || null };
+
+    // 2. تسجيل مفتاح الـ Idempotency ذرّياً في نفس المعاملة
+    if (req.idempotencyKey) {
+      const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
+      tx.set(idemRef, {
+        result: txResult,
+        uid: auth!.uid,
+        at: Timestamp.now()
+      });
+    }
+
+    return txResult;
   });
 
-  if (req.idempotencyKey) {
-    await db
-      .doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`)
-      .set({ result, at: Timestamp.now() })
-      .catch(() => undefined);
-  }
   return result;
 });
 
-/** تحويل بين مستخدمَين — معاملة ذرّية واحدة تخصم وتضيف */
+/** تحويل بين مستخدمَين — معاملة ذرّية واحدة تخصم وتضيف مع فحص تكرار ذرّي */
 export const economyTransfer = onCall(async (request) => {
   const auth = request.auth;
-  const v = validateEconomyRequest(request.data, auth?.uid);
+  const isAdmin = isAdminAuth(auth);
+  const v = validateEconomyRequest(request.data, auth?.uid, isAdmin);
   if (!v.ok) throw new HttpsError('invalid-argument', v.error || 'invalid-request');
   const req = v.value!;
 
-  if (req.idempotencyKey) {
-    const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
-    const existing = await idemRef.get();
-    if (existing.exists) return existing.data() || { ok: true, replayed: true };
-  }
-
   const result = await db.runTransaction(async (tx) => {
+    // فحص الـ Idempotency ذرّياً داخل المعاملة
+    if (req.idempotencyKey) {
+      const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
+      const existing = await tx.get(idemRef);
+      if (existing.exists) {
+        const cached = existing.data();
+        return (cached?.result as Record<string, unknown>) || { ok: true, replayed: true };
+      }
+    }
+
     const fromRef = db.doc(`users/${auth!.uid}`);
     const toRef = db.doc(`users/${req.toUid!}`);
     const [fromSnap, toSnap] = await Promise.all([tx.get(fromRef), tx.get(toRef)]);
@@ -194,15 +208,92 @@ export const economyTransfer = onCall(async (request) => {
       at: Timestamp.now(),
       idempotencyKey: req.idempotencyKey
     });
-    return { ok: true, senderBalance: fromBal, recipientBalance: toBal };
+
+    const txResult = { ok: true, senderBalance: fromBal, recipientBalance: toBal };
+
+    if (req.idempotencyKey) {
+      const idemRef = db.doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`);
+      tx.set(idemRef, {
+        result: txResult,
+        uid: auth!.uid,
+        at: Timestamp.now()
+      });
+    }
+
+    return txResult;
   });
 
-  if (req.idempotencyKey) {
-    await db
-      .doc(`economy_idempotency/${auth!.uid}:${req.idempotencyKey}`)
-      .set({ result, at: Timestamp.now() })
-      .catch(() => undefined);
-  }
+  return result;
+});
+
+/** المطالبة بالمكافأة اليومية بسلطة السيرفر الحصرية — السيرفر يتحقق من مرور 24 ساعة ويمنح المكافأة */
+export const claimDailyReward = onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError('unauthenticated', 'sign-in-required');
+
+  const result = await db.runTransaction(async (tx) => {
+    const userRef = db.doc(`users/${auth.uid}`);
+    const snap = await tx.get(userRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'user-not-found');
+    const data = snap.data() || {};
+
+    const lastClaimMillis = data.lastDailyClaim instanceof Timestamp
+      ? data.lastDailyClaim.toMillis()
+      : (typeof data.lastDailyClaim === 'number' ? data.lastDailyClaim : 0);
+
+    const nowMillis = Date.now();
+    const cooldownMillis = 20 * 60 * 60 * 1000; // 20 ساعة كحد أدنى لليوم الجديد
+    const resetStreakMillis = 48 * 60 * 60 * 1000; // يومان يعيدان التتابع إلى 1
+
+    if (lastClaimMillis && (nowMillis - lastClaimMillis) < cooldownMillis) {
+      throw new HttpsError('failed-precondition', 'daily-reward-already-claimed');
+    }
+
+    let currentStreak = Number(data.dailyStreak || 1);
+    if (lastClaimMillis && (nowMillis - lastClaimMillis) > resetStreakMillis) {
+      currentStreak = 1;
+    } else if (lastClaimMillis > 0) {
+      currentStreak = Math.min(30, currentStreak + 1);
+    }
+
+    // حساب المكافأة على السيرفر
+    const rewardCoins = 100 + (currentStreak * 25);
+    const rewardGems = currentStreak % 7 === 0 ? 10 : 2;
+    const currentCoins = Number(data.coins || 0);
+    const currentGems = Number(data.gems || 0);
+    const newCoins = currentCoins + rewardCoins;
+    const newGems = currentGems + rewardGems;
+
+    tx.set(userRef, {
+      coins: newCoins,
+      gems: newGems,
+      dailyStreak: currentStreak,
+      lastDailyClaim: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }, { merge: true });
+
+    const txId = db.collection('economy_transactions').doc().id;
+    tx.set(db.doc(`economy_transactions/${txId}`), {
+      uid: auth.uid,
+      type: 'daily_reward',
+      coinsGained: rewardCoins,
+      gemsGained: rewardGems,
+      streak: currentStreak,
+      balanceAfterCoins: newCoins,
+      balanceAfterGems: newGems,
+      at: Timestamp.now()
+    });
+
+    return {
+      ok: true,
+      coins: newCoins,
+      gems: newGems,
+      rewardCoins,
+      rewardGems,
+      streak: currentStreak
+    };
+  });
+
   return result;
 });
 

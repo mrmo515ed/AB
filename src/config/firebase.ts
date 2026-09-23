@@ -46,7 +46,8 @@ function createStandaloneRuntime(): FirebaseRuntime {
   let db: unknown;
   const settings = {
     ignoreUndefinedProperties: true,
-    experimentalAutoDetectLongPolling: true
+    experimentalForceLongPolling: true,
+    useFetchStreams: false
   };
   try {
     db = firebaseConfig.firestoreDatabaseId

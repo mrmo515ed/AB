@@ -5,20 +5,31 @@ import * as Sentry from '@sentry/browser';
 // ============================================================
 class ObservabilityService {
   private initialized = false;
+  private sentryActive = false;
   private latencyBuffer: number[] = [];
 
   public init() {
     if (this.initialized || typeof window === 'undefined') return;
 
-    try {
-      Sentry.init({
-        dsn: 'https://placeholder@sentry.io/4500000000', // Safe local reporting / telemetry capture
-        enabled: false, // Avoid network noise unless DSN is provided
-        integrations: [],
-        tracesSampleRate: 0.1,
-      });
-    } catch (e) {
-      console.warn('[Observability] Sentry init gracefully bypassed:', e);
+    const rawDsn =
+      (typeof process !== 'undefined' && process.env?.VITE_SENTRY_DSN) ||
+      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SENTRY_DSN) ||
+      (window as any).__SENTRY_DSN__ ||
+      '';
+
+    const validDsn = typeof rawDsn === 'string' && rawDsn.startsWith('https://') && !rawDsn.includes('placeholder');
+
+    if (validDsn) {
+      try {
+        Sentry.init({
+          dsn: rawDsn,
+          enabled: true,
+          tracesSampleRate: 0.2,
+        });
+        this.sentryActive = true;
+      } catch (e) {
+        console.warn('[Observability] Sentry initialization error:', e);
+      }
     }
 
     // Global Unhandled Rejection Logger
@@ -42,6 +53,14 @@ class ObservabilityService {
       timestamp: Date.now(),
       url: typeof window !== 'undefined' ? window.location.href : '',
     };
+
+    if (this.sentryActive) {
+      try {
+        Sentry.captureException(error, { extra: metadata });
+      } catch (_) {
+        // fallback to console
+      }
+    }
 
     console.error('[Observability Error Report]:', errorPayload);
   }

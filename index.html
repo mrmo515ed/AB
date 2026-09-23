@@ -23600,12 +23600,13 @@ boot();
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, RecaptchaVerifier, signInWithPhoneNumber, deleteUser, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
   import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
 
-  // لا نكتم أخطاء Firebase بعد الآن: الوضع الافتراضي 'error' يُظهر أخطاء حقيقية.
+  // ضبط مستوى سجلات Firebase: الوضع الافتراضي 'silent' لتفادي تنبيهات مهلة الشبكة الداخلية،
+  // مع بقاء معالجة الأخطاء الفعلية عبر handleFirestoreError و catch blocks.
   // للتشخيص الموسّع: localStorage.setItem("animeblack_fb_debug","1") ثم إعادة التحميل.
   try {
     let __fbDebug = false;
     try { __fbDebug = localStorage.getItem("animeblack_fb_debug") === "1"; } catch (_) {}
-    setLogLevel(__fbDebug ? 'debug' : 'error');
+    setLogLevel(__fbDebug ? 'debug' : 'silent');
     window.__FB_DEBUG = __fbDebug;
   } catch (_) {}
   window.getStorage = getStorage;
@@ -23917,7 +23918,7 @@ boot();
   const __useDbId = __dbOverride === "default" ? undefined : dbId;
   const firestoreInitSettings = {
     ignoreUndefinedProperties: true,
-    experimentalAutoDetectLongPolling: true
+    experimentalForceLongPolling: true
   };
   try {
     window.db = __useDbId !== undefined

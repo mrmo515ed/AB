@@ -29,7 +29,11 @@ export const OPS: EconomyOp[] = ['adjust', 'transfer'];
 
 const IDEMPOTENCY_RE = /^[A-Za-z0-9_\-]{1,120}$/;
 
-export function validateEconomyRequest(input: unknown, authUid: string | null | undefined): EconomyValidationResult {
+export function validateEconomyRequest(
+  input: unknown,
+  authUid: string | null | undefined,
+  isAdmin: boolean = false
+): EconomyValidationResult {
   if (!authUid) return { ok: false, error: 'unauthenticated' };
   if (!input || typeof input !== 'object') return { ok: false, error: 'invalid-argument' };
   const r = input as Record<string, unknown>;
@@ -43,6 +47,14 @@ export function validateEconomyRequest(input: unknown, authUid: string | null | 
   const amount = Number(r.amount);
   if (!Number.isInteger(amount) || amount === 0) return { ok: false, error: 'invalid-amount' };
   if (Math.abs(amount) > MAX_ABS_AMOUNT) return { ok: false, error: 'amount-too-large' };
+
+  // حماية الاقتصاد: العميل العادي مسموح له بالإنفاق فقط (دلتا سالبة)
+  // أي إضافة رصيد موجبة للمستخدم تتطلب سلطة إدارية أو سيرفر حصري
+  if (op === 'adjust') {
+    if (amount > 0 && !isAdmin) {
+      return { ok: false, error: 'client-spend-only-positive-adjustment-forbidden' };
+    }
+  }
 
   if (op === 'transfer') {
     if (amount <= 0) return { ok: false, error: 'transfer-must-be-positive' };

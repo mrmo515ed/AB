@@ -97,35 +97,33 @@ service firebase.storage {
     // ============================================================
     // Direct chat media — الرفع للمرسل فقط (مسار يحوي معرّفه)
     // ------------------------------------------------------------
-    // حد معروف وموثّق: قواعد التخزين لا تستطيع التحقق من عضوية
-    // المحادثة (قراءة Firestore عبر القواعد لا تدعم القاعدة المسماة
-    // ai-studio التي يستخدمها التطبيق) — لذلك القراءة للموقّعين فقط،
-    // والطريق الموثوق لعرض الوسائط الخاصة هو دالة getChatMediaUrl
-    // (Signed URL مع تحقق عضوية على السيرفر) في Cloud Functions.
+    // حماية الخصوصية: القراءة المباشرة مقتصرة على صاحب الملف أو الأدمن
+    // بينما يحصل الطرف الآخر في المحادثة على رابط موقّع ومؤقت عبر
+    // دالة getChatMediaUrl التي تتحقق من العضوية الفعلية على السيرفر.
     // ============================================================
     match /chats/{chatId}/{userId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isOwner(userId) || isTrustedUploader();
       allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isTrustedUploader();
     }
 
     // ============================================================
     // Group chat media — الرفع للعضو المرسل فقط (مساره يحوي معرّفه)
-    // (نفس الحد الموثّق أعلاه بالنسبة للتحقق من العضوية)
+    // القراءة المباشرة للمالك فقط، وأعضاء القروب عبر getChatMediaUrl
     // ============================================================
     match /groups/{groupId}/{userId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isOwner(userId) || isTrustedUploader();
       allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isTrustedUploader();
     }
 
     // ============================================================
-    // Community media — القراءة للموقّعين فقط (كانت عامة للجميع!)
+    // Community media — الرفع للمالك فقط، والقراءة المقيدة
     // ============================================================
     match /communities/{communityId}/{userId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isOwner(userId) || isTrustedUploader();
       allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isTrustedUploader();
     }
 
     // ============================================================

@@ -83,10 +83,10 @@ describe('قواعد Storage — التحصين (PR2 Phase 4)', () => {
     expect(storageRules).toContain('match /groups/{groupId}/{userId}/{fileName}');
   });
 
-  it('وسائط المجتمعات: القراءة للموقعين فقط (كانت عامة للجميع)', () => {
+  it('وسائط المجتمعات والمحادثات: القراءة مقيدة للمالك أو الأدمن (Signed URLs للبقية)', () => {
     const comm = storageRules.match(/match \/communities\/\{communityId\}\/\{userId\}\/\{fileName\} \{[\s\S]*?\n    \}/)?.[0];
     expect(comm).toBeTruthy();
-    expect(comm!).toContain('allow read: if isSignedIn()');
+    expect(comm!).toContain('allow read: if isOwner(userId) || isTrustedUploader()');
     expect(comm!).not.toContain('allow read: if true');
   });
 
@@ -134,15 +134,32 @@ describe('الجسر — لا كتابة عميل مباشرة للاقتصاد 
 
 describe('منطق الاقتصاد الموثوق — تحقق خالص (functions/src/economyValidation)', () => {
   it('رفض: بلا مصادقة / عملية غير معروفة / عملة غير معروفة', () => {
-    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 5 }, null).ok).toBe(false);
-    expect(validateEconomyRequest({ op: 'hack', currency: 'coins', amount: 5 }, 'u1').ok).toBe(false);
-    expect(validateEconomyRequest({ op: 'adjust', currency: 'gems', amount: 5 }, 'u1').ok).toBe(false);
+    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: -5 }, null).ok).toBe(false);
+    expect(validateEconomyRequest({ op: 'hack', currency: 'coins', amount: -5 }, 'u1').ok).toBe(false);
+    expect(validateEconomyRequest({ op: 'adjust', currency: 'gems', amount: -5 }, 'u1').ok).toBe(false);
+  });
+
+  it('حماية الاقتصاد: العميل العادي مسموح له بالإنفاق فقط (دلتا سالبة) وترفض أي إضافة ذاتية', () => {
+    // محاولة عميل عادي إضافة 100000 عملة لنفسه
+    const hackAttempt = validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 100000 }, 'u1', false);
+    expect(hackAttempt.ok).toBe(false);
+    expect(hackAttempt.error).toBe('client-spend-only-positive-adjustment-forbidden');
+
+    // إنفاق سليم من العميل
+    const validSpend = validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: -50, reason: 'شراء ملصق' }, 'u1', false);
+    expect(validSpend.ok).toBe(true);
+    expect(validSpend.value!.amount).toBe(-50);
+
+    // الأدمن مسموح له بالضبط الموجب
+    const adminGrant = validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 500, reason: 'مكافأة إدارية' }, 'admin_uid', true);
+    expect(adminGrant.ok).toBe(true);
+    expect(adminGrant.value!.amount).toBe(500);
   });
 
   it('رفض: مبالغ غير صحيحة أو صفرية أو هائلة', () => {
     expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 0 }, 'u1').ok).toBe(false);
-    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 5.5 }, 'u1').ok).toBe(false);
-    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 100001 }, 'u1').ok).toBe(false);
+    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: -5.5 }, 'u1').ok).toBe(false);
+    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: -100001 }, 'u1').ok).toBe(false);
   });
 
   it('تحويل: موجب فقط + مستلم إلزامي + لا تحويل ذاتي', () => {
@@ -152,15 +169,16 @@ describe('منطق الاقتصاد الموثوق — تحقق خالص (functi
     expect(validateEconomyRequest({ op: 'transfer', currency: 'coins', amount: 5, toUid: 'u2' }, 'u1').ok).toBe(true);
   });
 
-  it('طلب سليم يمرّ规范化 مع مفاتيح آمنة', () => {
+  it('طلب سليم يمرّ مع مفاتيح منع التكرار (Idempotency Key)', () => {
     const v = validateEconomyRequest(
-      { op: 'adjust', currency: 'xp', amount: 15, reason: 'مهمة', idempotencyKey: 'xp-abc_123' },
-      'u1'
+      { op: 'adjust', currency: 'coins', amount: -15, reason: 'شراء', idempotencyKey: 'spend-abc_123' },
+      'u1',
+      false
     );
     expect(v.ok).toBe(true);
-    expect(v.value!.amount).toBe(15);
-    expect(v.value!.idempotencyKey).toBe('xp-abc_123');
-    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: 5, idempotencyKey: 'a b' }, 'u1').ok).toBe(false);
+    expect(v.value!.amount).toBe(-15);
+    expect(v.value!.idempotencyKey).toBe('spend-abc_123');
+    expect(validateEconomyRequest({ op: 'adjust', currency: 'coins', amount: -5, idempotencyKey: 'a b' }, 'u1').ok).toBe(false);
   });
 
   it('applyDelta: يرفض السالب ويحتسب الصحيح', () => {
