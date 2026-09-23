@@ -29,6 +29,7 @@
 <meta name="twitter:description" content="شبكة الأوتاكو الشاملة — أنمي، مانجا، مجتمعات، وقصص في تطبيق واحد">
 <title>Anime Black — أنمي بلاك</title>
 <meta name="description" content="شبكة الأوتاكو الشاملة — أنمي، مانجا، مجتمعات، وقصص في تطبيق واحد">
+<script src="/dist/anime-black-core.umd.cjs"></script>
 <style>
 /* ===== v2: خط Cairo لم يكن محمّلاً إطلاقاً — الآن مضمّن base64 (40KB) ويعمل أوفلاين 100%% ===== */
 @font-face{font-family:'Cairo';font-style:normal;font-weight:400 900;font-display:swap;
@@ -428,27 +429,40 @@ svg.i.hero, .i.hero { width: 48px; height: 48px; }
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.15s ease, background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
   cursor: pointer;
+  user-select: none;
 }
 .chip:hover {
   color: #fff;
   border-color: var(--accent);
-  transform: translateY(-1.5px);
-  box-shadow: 0 6px 20px rgba(0,163,255,0.25);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 20px rgba(0,163,255,0.28);
+}
+.chip:active {
+  transform: scale(0.94);
+  transition: transform 0.1s ease;
 }
 .chip svg {
-  transition: transform 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .chip:hover svg {
-  transform: scale(1.15);
+  transform: scale(1.18);
 }
 .chip.on {
   background: var(--grad-fire);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 4px 20px rgba(0,163,255,0.45);
+  box-shadow: 0 4px 22px rgba(0,163,255,0.5), 0 0 0 2px rgba(0,240,255,0.25);
+  transform: scale(1.02);
+}
+.chip.on:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 24px rgba(0,163,255,0.65);
+}
+.chip.on:active {
+  transform: scale(0.96);
 }
 
 .badge {
@@ -4808,9 +4822,9 @@ PAGES.completeProfile=()=>{
         </div>
 
         <div>
-          <div class="lbl" style="font-weight:bold;margin-bottom:6px">تصنيفاتك المفضلة (اختر ما يعجبك)</div>
-          <div class="chiprow wrap" id="cp_interests" style="gap:6px">
-            ${["أكشن","شونين","مغامرة","خيال","دراما","كوميديا","غموض","سينين","إيسيكاي","رومانسية"].map((g,i)=>`<button type="button" class="chip ${i<3?'on':''}" onclick="this.classList.toggle('on');snd('tap')">${g}</button>`).join("")}
+          <div class="lbl" style="font-weight:bold;margin-bottom:6px">تصنيفاتك المفضلة (اختر ما يعجبك للحصول على توصيات دقيقة)</div>
+          <div class="chiprow wrap" id="cp_interests" style="gap:8px">
+            ${["أكشن","شونين","مغامرة","خيال","دراما","غموض","رعب","نفسي","كوميديا","سينين","إيسيكاي","رومانسية","خيال علمي","رياضة","قوى خارقة","شريحة من الحياة","موسيقى","ميكا"].map((g,i)=>`<button type="button" class="chip ${i<3?'on':''}" onclick="this.classList.toggle('on');snd('tap')">${g}</button>`).join("")}
           </div>
         </div>
 

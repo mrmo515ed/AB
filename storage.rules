@@ -1,25 +1,90 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
-    
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+
+    function isMedia() {
+      return isImage() || isVideo() || isAudio();
+    }
+
+    // User avatars, covers, profile voice notes
     match /users/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 15 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
     }
-    match /posts/{allPaths=**} {
+
+    // Posts media attachments
+    match /posts/{userId}/{fileName} {
       allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if false; // Only admins or via functions
+      allow write: if isOwner(userId) && request.resource.size < 50 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
     }
-    match /chats/{chatId}/{allPaths=**} {
+
+    // Stories (24h ephemeral media)
+    match /stories/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && request.resource.size < 50 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
+    }
+
+    // Reels (short videos)
+    match /reels/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024 && isVideo();
+      allow delete: if isOwner(userId);
+    }
+
+    // Direct chat media attachments
+    match /chats/{chatId}/{userId}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
     }
-    match /{allPaths=**} {
+
+    // Group chat media attachments
+    match /groups/{groupId}/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
+    }
+
+    // Community media attachments
+    match /communities/{communityId}/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner(userId) && request.resource.size < 30 * 1024 * 1024 && isMedia();
+      allow delete: if isOwner(userId);
+    }
+
+    // Universal public assets & badges
+    match /assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.resource.size < 10 * 1024 * 1024 && isMedia();
+    }
+
+    // Default Deny for anything else
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
     }
   }
 }

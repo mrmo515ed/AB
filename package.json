@@ -6,17 +6,37 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "mkdir -p dist && cp index.html server.js manifest.json sw.js pwa-*.png apple-touch-icon.png icon.svg firebase-applet-config.json dist/ 2>/dev/null || true",
-    "lint": "echo 'No linting required for vanilla JS'"
+    "build": "vite build && mkdir -p dist && cp index.html server.js manifest.json sw.js pwa-*.png apple-touch-icon.png icon.svg firebase-applet-config.json dist/ 2>/dev/null || true",
+    "lint": "eslint src/ server.js tests/",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
+    "@sentry/browser": "^11.0.0",
     "acorn": "^8.18.0",
+    "dompurify": "^3.4.15",
     "express": "^5.2.1",
+    "firebase": "^12.19.0",
+    "p-limit": "^7.3.3",
     "puppeteer": "^25.10.0",
-    "serve": "^14.2.4"
+    "serve": "^14.2.4",
+    "workbox-window": "^7.4.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@babel/parser": "^8.0.5"
+    "@babel/parser": "^8.0.5",
+    "@playwright/test": "^1.63.0",
+    "@types/dompurify": "^3.2.0",
+    "@types/node": "^26.6.2",
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }
