@@ -1,6 +1,6 @@
 import { ref, uploadBytesResumable, getDownloadURL, UploadTaskSnapshot } from 'firebase/storage';
 import pLimit from 'p-limit';
-import { storage, auth } from '../config/firebase';
+import { getStorage, getAuth } from '../config/firebase';
 import { observability } from '../services/observability';
 
 export interface UploadProgressInfo {
@@ -40,7 +40,7 @@ export class MediaUploadManager {
    */
   public static async uploadMedia(file: File | Blob, options: UploadOptions): Promise<string> {
     return uploadLimiter(async () => {
-      const user = auth.currentUser;
+      const user = (getAuth() as any).currentUser;
       if (!user) {
         throw new Error('يجب تسجيل الدخول أولاً لرفع الوسائط.');
       }
@@ -78,7 +78,7 @@ export class MediaUploadManager {
         storagePath = `${options.path}/${sub}/${user.uid}/${fileName}`;
       }
 
-      const storageRef = ref(storage, storagePath);
+      const storageRef = ref(getStorage() as any, storagePath);
 
       // Perform Resumable Upload with Retry
       let retries = 3;

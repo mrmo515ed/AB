@@ -11,13 +11,20 @@ vi.mock('firebase/firestore', async (importOriginal) => {
 });
 
 // Mock the firebase app config so no real Firebase project is contacted during tests
-vi.mock('../src/config/firebase', () => ({
-  app: {},
-  db: {},
-  auth: {},
-  storage: {},
-  googleProvider: {},
-}));
+vi.mock('../src/config/firebase', () => {
+  // الشكل lazy الجديد: موصلات دوال بدل ثوابت ساخنة
+  const fakeAuth = { currentUser: { uid: 'test_uid_sync' } };
+  return {
+    getFirebaseRuntime: () => ({ app: {}, db: {}, auth: fakeAuth, storage: {}, googleProvider: {} }),
+    getDb: () => ({}),
+    getAuth: () => fakeAuth,
+    getStorage: () => ({}),
+    getApp: () => ({}),
+    getGoogleProvider: () => ({}),
+    getMessagingSafe: async () => null,
+    firebaseConfig: {}
+  };
+});
 
 import { SyncEngine } from '../src/sync/syncEngine';
 

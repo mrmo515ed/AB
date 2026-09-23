@@ -1,5 +1,5 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { getDb } from '../config/firebase';
 import { observability } from '../services/observability';
 
 export interface PerformanceMetrics {
@@ -18,7 +18,7 @@ export class MetricsCollector {
     let status: 'CONNECTED' | 'LATENCY_WARNING' | 'OFFLINE' = 'OFFLINE';
 
     try {
-      const testDocRef = doc(db, 'test', 'connection');
+      const testDocRef = doc(getDb() as any, 'test', 'connection');
       await getDocFromServer(testDocRef);
       const elapsed = Math.round(performance.now() - startTime);
       observability.recordLatency(elapsed);

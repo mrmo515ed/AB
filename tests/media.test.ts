@@ -1,10 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// عزل كامل: لا اتصال بأي Firebase حقيقي أثناء اختبارات الوسائط
+vi.mock('../src/config/firebase', () => {
+  const fakeAuth = { currentUser: null };
+  return {
+    getFirebaseRuntime: () => ({ app: {}, db: {}, auth: fakeAuth, storage: {}, googleProvider: {} }),
+    getDb: () => ({}),
+    getAuth: () => fakeAuth,
+    getStorage: () => ({}),
+    getApp: () => ({}),
+    getGoogleProvider: () => ({}),
+    getMessagingSafe: async () => null,
+    firebaseConfig: {}
+  };
+});
+
 import { MediaUploadManager } from '../src/media/uploadManager';
-import { auth } from '../src/config/firebase';
+import { getAuth } from '../src/config/firebase';
 
 describe('Media Upload Pipeline & Memory Safety', () => {
+  let auth: { currentUser: unknown };
+
   beforeEach(() => {
-    // Mock authenticated user session
+    // Mock authenticated user session (عبر الموصل lazy)
+    auth = getAuth() as unknown as { currentUser: unknown };
     Object.defineProperty(auth, 'currentUser', {
       value: { uid: 'test_user_otaku_1', email: 'otaku@example.com' },
       configurable: true,

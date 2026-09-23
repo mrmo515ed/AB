@@ -1,6 +1,6 @@
 import { getToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { getMessagingSafe, db, auth, firebaseConfig } from '../config/firebase';
+import { getMessagingSafe, getDb, getAuth, firebaseConfig } from '../config/firebase';
 import { observability } from '../services/observability';
 
 export class FCMNotificationManager {
@@ -22,7 +22,7 @@ export class FCMNotificationManager {
         return null;
       }
 
-      const messaging = await getMessagingSafe();
+      const messaging = (await getMessagingSafe()) as any;
       if (!messaging) return null;
 
       const swRegistration = await navigator.serviceWorker.ready;
@@ -32,9 +32,9 @@ export class FCMNotificationManager {
 
       if (currentToken) {
         // Save FCM token to user document if logged in
-        const user = auth.currentUser;
+        const user = (getAuth() as any).currentUser;
         if (user) {
-          const userRef = doc(db, 'users', user.uid);
+          const userRef = doc(getDb() as any, 'users', user.uid);
           await updateDoc(userRef, {
             fcmTokens: arrayUnion(currentToken),
             lastActive: Date.now()
@@ -57,7 +57,7 @@ export class FCMNotificationManager {
    */
   public static async initForegroundListener(onNotification: (payload: any) => void): Promise<(() => void) | null> {
     try {
-      const messaging = await getMessagingSafe();
+      const messaging = (await getMessagingSafe()) as any;
       if (!messaging) return null;
 
       const unsub = onMessage(messaging, (payload) => {
