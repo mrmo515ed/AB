@@ -30926,42 +30926,31 @@ window.ensureGameState = function() {
   const now = Date.now();
   
   if (!S.game || typeof S.game !== "object") {
-    S.game = {};
-  }
-  
-  if (!S.game.profile || typeof S.game.profile !== "object") {
-    S.game.profile = {
-      hunterLevel: 1,
-      hunterXp: 0,
-      hunterXpNext: 100,
-      coins: (S.coins != null ? S.coins : 500),
-      gems: 25,
-      energy: 50,
-      maxEnergy: 50,
-      lastEnergyUpdate: now,
-      highScore: 0,
-      bestDistance: 0,
-      totalKills: 0,
-      bossesDefeated: 0,
-      totalMatches: 0,
-      totalWins: 0,
-      currentRank: "E-Rank Hunter",
-      equippedCharacterId: "c_ren",
-      equippedStageId: "s_forest",
-      dailyStreak: 1,
-      lastDailyClaim: 0,
-      lastReward: "مكافأة الانضمام لأكاديمية الصيادين (500 عملة + 25 جوهرة)",
-      isBanned: false
-    };
-  } else {
-    S.game.profile.maxEnergy = S.game.profile.maxEnergy || 50;
-    if (S.game.profile.energy == null) S.game.profile.energy = S.game.profile.maxEnergy;
-    if (S.game.profile.coins == null) S.game.profile.coins = (S.coins != null ? S.coins : 500);
-    if (S.game.profile.gems == null) S.game.profile.gems = 25;
-  }
-
-  if (!Array.isArray(S.game.characters) || S.game.characters.length === 0) {
-    S.game.characters = [
+    S.game = {
+      profile: {
+        hunterLevel: 1,
+        hunterXp: 0,
+        hunterXpNext: 100,
+        coins: (S.coins != null ? S.coins : 500),
+        gems: 25,
+        energy: 50,
+        maxEnergy: 50,
+        lastEnergyUpdate: now,
+        highScore: 0,
+        bestDistance: 0,
+        totalKills: 0,
+        bossesDefeated: 0,
+        totalMatches: 0,
+        totalWins: 0,
+        currentRank: "E-Rank Hunter",
+        equippedCharacterId: "c_ren",
+        equippedStageId: "s_forest",
+        dailyStreak: 1,
+        lastDailyClaim: 0,
+        lastReward: "مكافأة الانضمام لأكاديمية الصيادين (500 عملة + 25 جوهرة)",
+        isBanned: false
+      },
+      characters: [
         {
           id: "c_ren",
           name: "رين — ظل النينجا",
