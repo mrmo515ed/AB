@@ -8745,7 +8745,7 @@ window.toggleSavePost = function(pid) {
 // Delete Post Handlers
 window.confirmDelPost = function(pid) {
   closeOvl();
-  modal("حذف المنشور", `
+  $("#ovl").innerHTML = modal("حذف المنشور", `
     <div style="padding:10px 0;text-align:center">
       <div style="font-size:36px;margin-bottom:10px">🗑️</div>
       <div class="b xs" style="color:#fff;margin-bottom:6px">هل أنت متأكد من حذف هذا المنشور؟</div>
@@ -14788,7 +14788,7 @@ PAGES.savedArticles=()=>{setNav(false);setHdr(backHdr("المقالات والم
   else if(sf==="item") ps=[];
   return `<div class="pad col">
     <div class="chiprow">${[["all","الكل"],["post","منشورات"],["news","أخبار"],["reel","ريلز"],["item","عناصر محفوظة"]].map(([k,l])=>`<button class="chip ${(S.savF||"all")===k?'on':''}" onclick="S.savF='${k}';save();render();snd('tap')">${l}</button>`).join("")}</div>
-    ${sf==="all"||sf==="item"?`<div class="secttl"><h3>${I("bookmark","i s")} عناصر محفوظة من الموسوعة والأخبار (${(S.savedItems||[]).length})</h3></div>`+(S.savedItems||[]).length?`<div class="col">${(S.savedItems||[]).map((it,ii)=>`<div class="lstrow"><span class="ico-tile" style="background:${it.type==="anime"?"var(--grad-purple)":"var(--grad-cyan)"};color:#fff">${I(it.type==="anime"?"film":"inbox","i s")}</span><span class="g1 b xs" style="text-align:right">${esc(it.title)}</span><button class="btn btn-sec btn-xs" onclick="${it.type==="anime"?`go('animeDetail',{id:'${it.id}'})`:it.type==="video"?`go('videoDetail',{id:'${it.id}'})`:`go('newsView',{id:'${it.id}'})`}">فتح</button><button class="btn btn-ghost btn-xs" onclick="toggleSaveArticle('${it.id}')">${I("trash","i s")}</button></div>`).join("")}</div>`:`<div class="tiny fnt" style="padding:6px">لا عناصر محفوظة من الموسوعة</div>`:""}
+    ${sf==="all"||sf==="item"?`<div class="secttl"><h3>${I("bookmark","i s")} عناصر محفوظة من الموسوعة والأخبار (${(S.savedItems||[]).length})</h3></div>`+(S.savedItems||[]).length?`<div class="col">${(S.savedItems||[]).map((it,ii)=>`<div class="lstrow"><span class="ico-tile" style="background:${it.type==="anime"?"var(--grad-purple)":"var(--grad-cyan)"};color:#fff">${I(it.type==="anime"?"film":it.type==="manga"?"book":it.type==="video"?"clapper":"inbox","i s")}</span><span class="g1 b xs" style="text-align:right">${esc(it.title)}</span><button class="btn btn-sec btn-xs" onclick="${it.type==="anime"?`go('animeDetail',{id:'${it.id}'})`:it.type==="manga"?`go('mangaDetail',{id:'${it.id}'})`:it.type==="video"?`go('videoDetail',{id:'${it.id}'})`:`go('newsView',{id:'${it.id}'})`}">فتح</button><button class="btn btn-ghost btn-xs" onclick="toggleSaveArticle('${it.id}')">${I("trash","i s")}</button></div>`).join("")}</div>`:`<div class="tiny fnt" style="padding:6px">لا عناصر محفوظة من الموسوعة</div>`:""}
     ${ps.length?ps.map(p=>postCard(p)).join(""):`${sf==="item"?"":`<div class="tiny fnt center" style="padding:10px">لا منشورات محفوظة — احفظها من زر الحفظ في البطاقة</div>`}`}
     ${S.wiki.lore.map(l=>`<button class="lstrow" onclick="go('loreDetail',{id:'${l.id}'})"><span class="ico-tile" style="background:var(--grad-emerald);color:#fff">${I("help","i s")}</span>
       <span class="g1" style="text-align:right"><span class="b xs" style="display:block">${esc(l.t)}</span><span class="tiny fnt">شرح · ${l.r}</span></span>${I("fwd","i s")}</button>`).join("")}
@@ -22645,6 +22645,414 @@ function boot(){
   if(!S.v25seen){setTimeout(()=>{toast("أنمي بلاك الإصدار ٢٥٫٠: استوديوهات نشر مخصصة لكل نوع، غرف بكامل المرفقات والاستطلاعات والإعلانات، وغلاف فعالية من هاتفك ","ok",4200);S.v25seen=true;save()},2600)}
   console.log("الصفحات المتاحة:",Object.keys(PAGES).join(", "));
 }
+
+/* ============================================================
+   99) استكمال الأنظمة الناقصة وإصلاحات حرجة — Arena Audit
+   (دوال كانت أزرارها معروضة بدون كود + صفحات مفقودة)
+   ============================================================ */
+
+/* --- إغلاق النوافذ: كانت تُستدعى باسمين غير معرّفين فتعطّل حذف المنشورات وإغلاق النوافذ --- */
+function closeModal(){ closeOvl(); }
+function closeSheet(){ closeOvl(); }
+
+/* --- فتح المنشور وتفاصيله --- */
+function openPost(pid){ if(!pid) return; go("comments",{pid}); }
+function openPostDetail(pid){ if(!pid) return; go("comments",{pid}); }
+
+/* --- عارض الصور بالحجم الكامل --- */
+function openImageViewer(src){
+  if(!src){ toast("لا توجد صورة للمعاينة","err"); return; }
+  const ovl=$("#ovl"); if(!ovl) return;
+  ovl.innerHTML=`<div class="ov glass" onclick="closeOvl()" style="background:rgba(0,0,0,.94);z-index:220">
+    <div style="position:relative;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px" onclick="event.stopPropagation()">
+      <img src="${esc(src)}" alt="" style="max-width:96vw;max-height:78vh;object-fit:contain;border-radius:12px">
+      <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center">
+        <a class="btn btn-sec btn-sm" href="${esc(src)}" target="_blank" rel="noopener">${I("max","i s")} فتح بالحجم الكامل</a>
+        <button class="btn btn-sec btn-sm" onclick="copyTxt('${esc(src).replace(/'/g,"")}')">${I("copy","i s")} نسخ الرابط</button>
+        <button class="btn btn-primary btn-sm" onclick="closeOvl()">${I("x","i s")} إغلاق</button>
+      </div>
+    </div></div>`;
+  snd("tap");
+}
+
+/* --- نظام تتبّع الأنمي: المفضلة / القائمة / الحلقات / السجل --- */
+function toggleFavAnime(id){
+  if(!id) return;
+  S.me=S.me||{}; S.me.favAnime=S.me.favAnime||[];
+  const a=((S.wiki&&S.wiki.anime)||[]).find(x=>x.id===id)||((S.wiki&&S.wiki.manga)||[]).find(x=>x.id===id);
+  const nm=(a&&a.n)||"العمل";
+  const i=S.me.favAnime.indexOf(id);
+  if(i>=0){ S.me.favAnime.splice(i,1); toast("أُزيل «"+nm+"» من المفضلة","info"); snd("tap"); }
+  else{ S.me.favAnime.push(id); addXP(5,"إضافة إلى المفضلة"); toast("أُضيف «"+nm+"» إلى المفضلة ❤","ok"); snd("success"); }
+  S.favAnime=S.me.favAnime.slice();
+  save(); render();
+}
+function trackAnime(id, el){
+  if(!id) return;
+  S.me=S.me||{}; S.me.watching=S.me.watching||[];
+  const a=((S.wiki&&S.wiki.anime)||[]).find(x=>x.id===id);
+  const mg=((S.wiki&&S.wiki.manga)||[]).find(x=>x.id===id);
+  const src=a||mg;
+  if(!src){ toast("العمل غير موجود في الموسوعة","err"); return; }
+  const ex=S.me.watching.findIndex(w=>w.id===id || w.n===src.n);
+  if(ex>=0){
+    S.me.watching.splice(ex,1);
+    toast("أُزيل «"+src.n+"» من قائمة المتابعة","info"); snd("tap");
+  }else{
+    S.me.watching.push({id:id, n:src.n, s:1, e:0, t:(a?(a.ep||1):(src.ch||1)), kind:(a?"anime":"manga")});
+    addXP(10,"إضافة عمل لقائمة المتابعة");
+    if(el){ el.classList.add("btn-primary"); el.classList.remove("btn-sec"); el.innerHTML=IF("check","i s")+" تابع ✓"; }
+    toast("أُضيف «"+src.n+"» لقائمة المتابعة ","ok"); snd("success");
+  }
+  save(); render();
+}
+function watchEp(aid, n, el){
+  const a=((S.wiki&&S.wiki.anime)||[]).find(x=>x.id===aid); if(!a) return;
+  S.me=S.me||{}; S.me.history=S.me.history||[]; S.me.watching=S.me.watching||[];
+  const exist=S.me.history.some(h=>h.a===aid&&h.e===n&&!h.type);
+  if(!exist){
+    S.me.history.unshift({a:aid, e:n, t:a.n, at:now()});
+    S.me.episodes=(S.me.episodes||0)+1;
+    addXP(15,"مشاهدة حلقة");
+  }
+  const w=S.me.watching.find(x=>x.id===aid||x.n===a.n);
+  if(w){ w.e=Math.max(w.e||0, n); }
+  save(); render(); snd("success");
+  toast(exist?("الحلقة "+n+" مسجّلة في سجلك مسبقاً"):("شُاهدت الحلقة "+n+" من "+a.n+" ✓"),"ok");
+}
+function readMangaCh(mid, n){
+  const a=((S.wiki&&S.wiki.manga)||[]).find(x=>x.id===mid); if(!a) return;
+  S.me=S.me||{}; S.me.history=S.me.history||[];
+  const exist=S.me.history.some(h=>h.a===mid&&h.e===n&&h.type==="manga");
+  if(!exist){
+    S.me.history.unshift({a:mid, e:n, t:a.n, at:now(), type:"manga"});
+    S.me.mangaChapters=(S.me.mangaChapters||0)+1;
+    addXP(10,"قراءة فصل مانجا");
+  }
+  save(); render(); snd("success");
+  toast(exist?("الفصل "+n+" مسجّل في سجلك مسبقاً"):("قرأت الفصل "+n+" من "+a.n+" ✓"),"ok");
+}
+function clearHistory(){
+  if(!confirm("هل تريد مسح سجل المشاهدة بالكامل؟ لا يمكن التراجع.")) return;
+  S.me=S.me||{}; S.me.history=[];
+  save(); render(); toast("تم مسح سجل المشاهدة بالكامل","info");
+}
+function histGo(x){
+  if(!x) return;
+  if(x.type==="story"){ closeOvl(); go("createStory"); return; }
+  if(x.type==="manga"){ go("mangaDetail",{id:x.a}); return; }
+  const a=((S.wiki&&S.wiki.anime)||[]).find(y=>y.id===x.a);
+  if(a) go("animeDetail",{id:x.a});
+  else { toast("العمل غير موجود في الموسوعة","err"); go("animeWiki",{cat:"anime"}); }
+}
+
+/* --- إعجابات وحفظ عناصر الموسوعة والأخبار --- */
+function toggleQuoteLike(qi){
+  const q=((S.wiki&&S.wiki.quotes)||[])[qi]; if(!q) return;
+  q.liked=!q.liked;
+  q.l=Math.max(0,(q.l||0)+(q.liked?1:-1));
+  if(q.liked){ addXP(2,"إعجاب باقتباس"); toast("أعجبك الاقتباس ","ok"); snd("success"); }
+  else{ toast("أُزيل إعجابك بالاقتباس","info"); snd("tap"); }
+  save(); render();
+}
+function toggleCharLike(id){
+  const c=((S.wiki&&S.wiki.chars)||[]).find(x=>x.id===id); if(!c) return;
+  c.liked=!c.liked;
+  c.likes=Math.max(0,(c.likes||0)+(c.liked?1:-1));
+  S.me=S.me||{}; S.me.favChars=S.me.favChars||[];
+  const i=S.me.favChars.indexOf(id);
+  if(c.liked&&i<0) S.me.favChars.push(id);
+  if(!c.liked&&i>=0) S.me.favChars.splice(i,1);
+  if(c.liked){ addXP(3,"دعم شخصية"); toast("أعجبت بـ "+(c.n||"الشخصية")+" ❤","ok"); snd("success"); }
+  else{ toast("أُزيل إعجابك بـ "+(c.n||"الشخصية"),"info"); snd("tap"); }
+  save(); render();
+}
+function toggleNewsLike(id){
+  if(!id) return;
+  S.newsLikes=S.newsLikes||[];
+  const i=S.newsLikes.indexOf(id);
+  if(i>=0){ S.newsLikes.splice(i,1); toast("أُزيل إعجابك بالخبر","info"); snd("tap"); }
+  else{ S.newsLikes.push(id); addXP(2,"إعجاب بخبر"); toast("أعجبك الخبر ","ok"); snd("success"); }
+  save(); render();
+}
+function toggleSaveArticle(id, title, type){
+  if(!id) return;
+  S.savedItems=S.savedItems||[];
+  const i=S.savedItems.findIndex(x=>x.id===id);
+  if(i>=0){
+    const it=S.savedItems[i];
+    S.savedItems.splice(i,1);
+    toast("أُزيل «"+(it.title||it.t||"العنصر")+"» من المحفوظات","info"); snd("tap");
+  }else{
+    S.savedItems.unshift({id:id, title:(title||"عنصر محفوظ"), t:(title||"عنصر محفوظ"), type:(type||"item"), at:now()});
+    addXP(3,"حفظ عنصر");
+    toast("حُفظ في «المقالات والمحفوظات» ","ok"); snd("success");
+  }
+  save(); render();
+}
+
+/* --- الريلز: اختيار الصوت والحفظ --- */
+function pickReelMusic(id){
+  const r=(S.reels||[]).find(x=>x.id===id); if(!r) return;
+  if(S.reelMusic===r.music){ S.reelMusic=""; toast("أُلغي اختيار الصوت","info"); snd("tap"); }
+  else{ S.reelMusic=r.music; addXP(2,"اختيار صوت ريل"); toast("تم اختيار الصوت: "+r.music+" ","ok"); snd("success"); }
+  save(); render();
+}
+function toggleReelSave(id){
+  const r=(S.reels||[]).find(x=>x.id===id); if(!r) return;
+  r.saved=!r.saved;
+  S.me=S.me||{}; S.me.saved=S.me.saved||[];
+  const i=S.me.saved.indexOf(id);
+  if(r.saved&&i<0) S.me.saved.push(id);
+  if(!r.saved&&i>=0) S.me.saved.splice(i,1);
+  toast(r.saved?"حُفظ الريل في محفوظاتك ":"أُزيل الريل من المحفوظات", r.saved?"ok":"info");
+  snd(r.saved?"success":"tap");
+  save(); render();
+}
+
+/* --- رفع صورة القصة (كان input بدون معالج) --- */
+function stImgUpload(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f) return;
+  if(!/^image\//.test(f.type)){ toast("الملف ليس صورة صالحة","err"); return; }
+  if(f.size>10*1024*1024){ toast("حجم الصورة كبير جداً — الحد الأقصى 10MB","err"); return; }
+  const reader=new FileReader();
+  reader.onload=e=>{ S.storyImg=e.target.result; S.storyVideo=""; save(); render(); toast("تم إدراج الصورة في القصة بنجاح 🖼️","ok"); };
+  reader.onerror=()=>toast("تعذّرت قراءة الصورة","err");
+  reader.readAsDataURL(f);
+  try{ inp.value=""; }catch(_){}
+}
+
+/* --- إدراج رمز SVG مضمّن [[icon]] داخل نص المنشور (مثل insMention) --- */
+function insToken(ic){
+  if(!ic) return;
+  const t=" [["+ic+"]] ";
+  const i=$("#pub_txt")||$("#stxt");
+  if(!i){ toast("افتح محرر النص أولاً","err"); return; }
+  const s=(typeof i.selectionStart==="number")?i.selectionStart:i.value.length;
+  const e=(typeof i.selectionEnd==="number")?i.selectionEnd:s;
+  i.value=i.value.slice(0,s)+t+i.value.slice(e);
+  const pos=s+t.length;
+  try{ i.setSelectionRange(pos,pos); }catch(_){}
+  if(i.id==="pub_txt"){ S.draftText=i.value; try{ cnt(i,500,"pub_cnt"); }catch(_){} }
+  else{ S.storyDraftText=i.value; }
+  closeOvl(); i.focus();
+  toast("أُدرج الرمز في النص ","ok");
+}
+
+/* --- مسح/إدخال بطاقة QR لصديق --- */
+function scanSuccess(code){
+  if(typeof code!=="string"||!code.trim()){
+    $("#ovl").innerHTML=modal(I("qr","i s")+" مسح بطاقة صديق",`
+      <div class="col" style="gap:10px">
+        <div class="tiny fnt">وجّه الكاميرا لبطاقة صديقك، أو أدخل رمز البطاقة يدوياً.<br>الصيغة: <span class="mono">ANIMEBLACK://USER/اسم_المستخدم</span> أو <span class="mono">@username</span></div>
+        <input class="inp" id="scan_code_inp" placeholder="ANIMEBLACK://USER/otaku_hero" style="direction:ltr;text-align:left" autofocus>
+        <div class="row" style="gap:8px">
+          <button class="btn btn-primary g1" onclick="scanSuccess(($('#scan_code_inp')&&$('#scan_code_inp').value)||'')">${I("check","i s")} معالجة البطاقة</button>
+          <button class="btn btn-ghost g1" onclick="closeOvl()">إلغاء</button>
+        </div>
+      </div>`);
+    snd("tap");
+    return;
+  }
+  const un=code.trim().replace(/^ANIMEBLACK:\/\/USER\//i,"").replace(/^@/,"").trim().toLowerCase();
+  if(!un){ toast("رمز البطاقة فارغ","err"); return; }
+  let hit=(S.users||[]).find(x=>String(x.username||"").toLowerCase()===un);
+  if(!hit && S.me && String(S.me.username||"").toLowerCase()===un) hit=S.me;
+  if(!hit){ toast("لم يُعثر على صاحب البطاقة: @"+un,"err"); snd("error"); return; }
+  closeOvl();
+  if(isMe(hit.id)){ go("qrCard"); toast("هذه بطاقتك الخاصة ","info"); return; }
+  if(!(S.following||[]).includes(hit.id)) follow(hit.id);
+  addXP(15,"إضافة صديق عبر بطاقة QR");
+  celebrate("تمت إضافة "+hit.name+" من البطاقة ");
+  setTimeout(()=>openProfile(hit.id), 600);
+}
+
+/* --- تصدير كل بيانات الحساب (GDPR) --- */
+function exportMyData(){
+  const m=S.me||{};
+  const data={
+    app:"Anime Black",
+    exportedAt:new Date().toISOString(),
+    profile:{ id:m.id, uid:m.uid, name:m.name, username:m.username, email:m.email, phone:m.phone, bio:m.bio, level:m.level, xp:m.xp, reputation:m.reputation, joined:m.joined, role:m.role },
+    posts:getMyProfilePosts().map(p=>({ id:p.id, text:p.text, tags:p.tags||[], createdAt:p.createdAt, likes:p.likes, comments:(p.comments||[]).length, type:p.type||"post" })),
+    watchHistory:m.history||[],
+    watchingList:m.watching||[],
+    favAnime:m.favAnime||[],
+    favChars:m.favChars||[],
+    savedItems:S.savedItems||[],
+    newsLikes:S.newsLikes||[],
+    following:S.following||[],
+    stats:{ coins:S.coins, stars:S.stars, level:m.level, xp:m.xp, episodes:m.episodes, mangaChapters:m.mangaChapters, watchHours:m.watchHours, reputation:m.reputation }
+  };
+  const ok=dl("animeblack-my-data.json", JSON.stringify(data,null,2));
+  toast(ok?"صُدّرت كل بياناتك كملف JSON ✓":"تعذّر التصدير", ok?"ok":"err");
+}
+
+/* --- الحرس التلقائي الصارم على كل الكيانات (أدمن) --- */
+function enforceGlobalAIHealthGuard(){
+  ensureCommunities();
+  const list=S.communities||[];
+  if(!list.length){ toast("لا توجد كيانات لتطبيق التدقيق عليها","info"); return; }
+  if(!confirm("تطبيق التدقيق الصارم (AI Shield) على جميع الكيانات ("+list.length+")؟")) return;
+  S.guildStrictGuards=S.guildStrictGuards||{};
+  list.forEach(c=>{ S.guildStrictGuards[c.id]=true; });
+  S.notifs=S.notifs||[];
+  S.notifs.unshift({ id:uid(), type:"system", actorId:"system", title:"تفعيل التدقيق الصارم للكل",
+    text:"طُبّق الحرس التلقائي الصارم على جميع النقابات والمجتمعات ("+list.length+" كيان).", at:now(), read:false });
+  save();
+  addXP(20,"تدقيق صارم شامل");
+  celebrate("فُعّل التدقيق الصارم على "+list.length+" كيان ");
+  render();
+}
+
+/* --- تثبيت/إلغاء تثبيت قنوات المجتمعات --- */
+function toggleChPin(cid, chid){
+  const c=(S.communities||[]).find(x=>x.id===cid); if(!c) return;
+  const ch=((c.channels)||[]).find(x=>x.id===chid); if(!ch) return;
+  ch.pinned=!ch.pinned;
+  c.channels.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
+  save(); render(); snd("tap");
+  toast(ch.pinned?("ثُبّتت القناة #"+ch.name+" 📌"):("أُلغي تثبيت القناة #"+ch.name),"ok");
+}
+
+/* --- صفحات كانت تُستدعى بدون تعريف --- */
+PAGES.userProfile=()=>PAGES.publicProfile();
+PAGES.communities=()=>PAGES.communityHub();
+
+/* صفحة: تفاصيل المانجا */
+PAGES.mangaDetail=()=>{
+  const a=((S.wiki&&S.wiki.manga)||[]).find(x=>x.id===S.params.id);
+  if(!a){ setNav(false); setHdr(backHdr("المانجا","")); return emptyState("book","المانجا غير موجودة في الموسوعة",""); }
+  setNav(false); setHdr(backHdr(a.n, a.en||"", `<button class="iconbtn" onclick="openSheet('shareSheet')">${I("share")}</button>`));
+  const fav=((S.me&&S.me.favAnime)||[]).includes(a.id);
+  const chs=Math.max(1, Math.min(8, a.ch||1));
+  const hist=(S.me&&S.me.history)||[];
+  return `<div>
+    <div class="art-bg" style="--c1:${a.c1};--c2:${a.c2};height:190px;display:flex;align-items:center;justify-content:center;font-size:72px;position:relative;${bgImg(a)}">
+      ${I(a.emo||"book","xl")}
+      <span class="badge b-gold" style="position:absolute;top:11px;right:11px;font-size:13px;font-weight:bold">${I("star","i s")} ${a.rating||"-"}</span>
+      <span class="badge ${(a.status==='مستمرة'||a.status==='مستمر')?'b-emerald':'b-gray'}" style="position:absolute;top:11px;left:11px">${esc(a.status||"")}</span>
+    </div>
+    <div class="pad col" style="gap:14px">
+      <div>
+        <div class="bb" style="font-size:21px">${esc(a.n)}</div>
+        <div class="tiny fnt mono" style="font-size:12px;margin-top:2px">${esc(a.en||"")} · ${a.ch||0} فصل</div>
+      </div>
+      <div class="row wrap" style="gap:8px">
+        <button class="btn ${fav?'btn-rose':'btn-primary'} btn-sm g1" onclick="toggleFavAnime('${a.id}')">${IF("heart","i s")} ${fav?"في المفضلة":"أضف للمفضلة"}</button>
+        <button class="btn btn-sec btn-sm g1" onclick="trackAnime('${a.id}',this)">${I("check","i s")} أتابعه</button>
+        <button class="btn btn-sec btn-sm g1" onclick="toggleSaveArticle('${a.id}','${esc(a.n).replace(/'/g,"")}','manga')">${I("bookmark","i s")} حفظ</button>
+        <button class="btn btn-sec btn-sm" onclick="openSheet('shareSheet')">${I("share","i s")}</button>
+      </div>
+      ${a.desc?`<div class="card" style="padding:14px"><div class="b sm">${I("file","i s")} القصة</div><p class="xs mut" style="margin-top:8px;line-height:1.8">${esc(a.desc)}</p></div>`:""}
+      <div class="secttl"><h3>${I("book","i s")} الفصول</h3><span class="badge b-gray mono">${a.ch||0}</span></div>
+      <div class="col">${Array.from({length:chs},(_,i2)=>{const n=i2+1;const rd=hist.some(h=>h.a===a.id&&h.e===n&&h.type==="manga");
+        return `<button class="lstrow" onclick="readMangaCh('${a.id}',${n})">
+          <span class="ico-tile" style="width:44px;height:34px;border-radius:9px;background:linear-gradient(135deg,${a.c1},${a.c2});font-size:11px;font-weight:900;color:#fff">${n}</span>
+          <span class="g1" style="text-align:right"><span class="b tiny" style="display:block">الفصل ${n}</span><span class="tiny fnt">${rd?'<b style="color:var(--emerald)">قرأتَه ✓</b>':"اضغط للقراءة"}</span></span>${I(rd?"check":"fwd","i s")}</button>`;}).join("")}</div>
+    </div>
+  </div>`;
+};
+
+/* صفحة: منشور صور */
+PAGES.createPhotos=()=>{
+  setNav(false); setHdr(backHdr("منشور صور","اختر حتى 6 صور"));
+  S.photoDraft=S.photoDraft||{imgs:[], text:""};
+  return `<div class="pad col">
+    <input type="file" id="phFile" accept="image/*" multiple style="display:none" onchange="phImgsAdd(this)">
+    <div class="card2" style="padding:14px">
+      <div class="b xs">${I("image","i s")} صور المنشور (${S.photoDraft.imgs.length}/6)</div>
+      <div class="grid3" style="gap:8px;margin-top:10px">
+        ${S.photoDraft.imgs.map((im,ii)=>`<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--line2)"><img loading="lazy" src="${esc(im.src)}" style="width:100%;height:100%;object-fit:cover" alt=""><button class="iconbtn" style="position:absolute;top:4px;left:4px;width:24px;height:24px;background:rgba(0,0,0,.6);color:#fff;border:none" onclick="phImgsDel(${ii})">${I("x","i s")}</button></div>`).join("")}
+        ${S.photoDraft.imgs.length<6?`<button class="card2 center" style="aspect-ratio:1;border-style:dashed;cursor:pointer" onclick="document.getElementById('phFile').click()">${I("plus","l")}</button>`:""}
+      </div>
+    </div>
+    <textarea class="inp" id="phText" rows="3" placeholder="اكتب وصفاً للصور..." oninput="S.photoDraft.text=this.value">${esc(S.photoDraft.text||"")}</textarea>
+    <div class="row wrap" style="gap:7px">
+      <button class="btn btn-primary btn-lg g1" onclick="publishPhotosNow()">${I("send","i s")} نشر الآن</button>
+      <button class="btn btn-ghost" onclick="back()">إلغاء</button>
+    </div>
+    <div class="tiny fnt">${I("info","i s")} يمكنك إضافة حتى 6 صور في منشور واحد</div>
+  </div>`;
+};
+function phImgsAdd(inp){
+  S.photoDraft=S.photoDraft||{imgs:[], text:""};
+  const files=[...(inp.files||[])].slice(0, Math.max(0, 6-S.photoDraft.imgs.length));
+  if(!files.length){ toast("الحد الأقصى 6 صور في المنشور","err"); return; }
+  let pending=files.length;
+  const done=()=>{ if(--pending<=0){ save(); render(); toast("أُضيفت الصور ","ok"); } };
+  files.forEach(f=>{
+    if(!/^image\//.test(f.type)){ toast("تم تجاهل ملف غير صالح: "+f.name,"err"); done(); return; }
+    fileToDataURL(f, 10*1024*1024, src=>{
+      if(src) S.photoDraft.imgs.push({type:"image", src:src, name:f.name, size:f.size});
+      done();
+    });
+  });
+  try{ inp.value=""; }catch(_){}
+}
+function phImgsDel(ii){ if(!S.photoDraft) return; S.photoDraft.imgs.splice(ii,1); save(); render(); }
+function publishPhotosNow(){
+  S.photoDraft=S.photoDraft||{imgs:[], text:""};
+  if(!S.photoDraft.imgs.length){ toast("أضف صورة واحدة على الأقل","err"); return; }
+  const st=window.PUBLISH_STATE||(window.PUBLISH_STATE={});
+  st.editPostId=null; st.schedule=null; st.isPublishing=false;
+  st.text=(S.photoDraft.text||"").trim();
+  st.media=S.photoDraft.imgs.slice();
+  st.poll=null; st.quotedPost=null; st.linkPreview=null;
+  st.location=""; st.tags=[]; st.mentions=[]; st.spoiler=false; st.warningText=""; st.privacy="public";
+  S.photoDraft={imgs:[], text:""};
+  window.executePublishPost();
+}
+
+/* صفحة: استطلاع رأي احترافي */
+PAGES.createPollPro=()=>{
+  setNav(false); setHdr(backHdr("استطلاع رأي احترافي","سؤال وخيارات متعددة"));
+  S.pollDraft=S.pollDraft||{q:"", o:["",""], end:"", anon:false};
+  return `<div class="pad col">
+    <div class="card2" style="padding:14px">
+      <div class="lbl">${I("help","i s")} سؤال الاستطلاع</div>
+      <input class="inp" maxlength="120" placeholder="مثال: ما أفضل أنمي هذا الموسم؟" value="${esc(S.pollDraft.q||"")}" oninput="S.pollDraft.q=this.value">
+    </div>
+    <div class="card2" style="padding:14px">
+      <div class="lbl">الخيارات (2-4)</div>
+      <div class="col" style="gap:7px;margin-top:8px">
+        ${S.pollDraft.o.map((o,oi)=>`<div class="row" style="gap:6px"><input class="inp g1" maxlength="60" placeholder="الخيار ${oi+1}" value="${esc(o||"")}" oninput="S.pollDraft.o[${oi}]=this.value">${S.pollDraft.o.length>2?`<button class="iconbtn" onclick="pollOptDel(${oi})">${I("trash","i s")}</button>`:""}</div>`).join("")}
+      </div>
+      ${S.pollDraft.o.length<4?`<button class="btn btn-sec btn-sm" style="margin-top:9px" onclick="pollOptAdd()">${I("plus","i s")} إضافة خيار</button>`:""}
+    </div>
+    <div class="card2" style="padding:14px">
+      <div class="lbl">${I("clock","i s")} مدة الاستطلاع (اختياري)</div>
+      <input class="inp" type="datetime-local" value="${esc(S.pollDraft.end||"")}" oninput="S.pollDraft.end=this.value">
+      <button class="row xs" style="gap:7px;color:var(--muted);margin-top:9px" onclick="S.pollDraft.anon=!S.pollDraft.anon;render()"><span class="sw ${S.pollDraft.anon?'on':''}"></span> تصويت مجهول</button>
+    </div>
+    <div class="row wrap" style="gap:7px">
+      <button class="btn btn-primary btn-lg g1" onclick="publishPollProNow()">${I("send","i s")} نشر الاستطلاع</button>
+      <button class="btn btn-ghost" onclick="back()">إلغاء</button>
+    </div>
+  </div>`;
+};
+function pollOptAdd(){ S.pollDraft=S.pollDraft||{q:"", o:[]}; if(S.pollDraft.o.length<4){ S.pollDraft.o.push(""); save(); render(); } }
+function pollOptDel(i){ if(!S.pollDraft) return; S.pollDraft.o.splice(i,1); save(); render(); }
+function publishPollProNow(){
+  S.pollDraft=S.pollDraft||{};
+  const q=(S.pollDraft.q||"").trim();
+  const opts=(S.pollDraft.o||[]).map(x=>(x||"").trim()).filter(Boolean);
+  if(!q){ toast("اكتب سؤال الاستطلاع أولاً","err"); return; }
+  if(opts.length<2){ toast("أضف خيارين على الأقل","err"); return; }
+  let endAt=null;
+  if(S.pollDraft.end){ const t2=new Date(S.pollDraft.end).getTime(); if(!isNaN(t2)) endAt=t2; }
+  const st=window.PUBLISH_STATE||(window.PUBLISH_STATE={});
+  st.editPostId=null; st.schedule=null; st.isPublishing=false;
+  st.text=q;
+  st.media=[]; st.quotedPost=null; st.linkPreview=null;
+  st.location=""; st.tags=[]; st.mentions=[]; st.spoiler=false; st.warningText=""; st.privacy="public";
+  st.poll={ question:q, options:opts.map((t3,i3)=>({id:i3, t:t3, v:0})), votes:{}, voted:null,
+    end:endAt, endsAt:endAt, duration: endAt?Math.max(1,Math.round((endAt-Date.now())/36e5)):24, isMultiple:false, anon:!!S.pollDraft.anon };
+  S.pollDraft={q:"", o:["",""], end:"", anon:false};
+  window.executePublishPost();
+}
+
 boot();
 </script>
 

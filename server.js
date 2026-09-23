@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Body parsing with generous limit
 app.use(express.json({ limit: "25mb" }));
@@ -31,15 +31,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build",
-    },
-  },
-});
+// Initialize Gemini Client lazily (so the server boots cleanly without GEMINI_API_KEY)
+let aiClient = null;
+function getAI() {
+  if (!aiClient) {
+    aiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+  }
+  return aiClient;
+}
 
 // System Health and Performance Metrics Endpoint
 app.get("/api/health", (req, res) => {
@@ -95,7 +101,7 @@ app.post("/api/gemini/search-agent", async (req, res) => {
     }
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: "gemini-3.8-flash",
         contents: contents,
         config: {
