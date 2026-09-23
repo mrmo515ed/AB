@@ -145,20 +145,16 @@ app.post("/api/gemini/search-agent", async (req, res) => {
     } catch (genError) {
       console.warn("Gemini Search Grounding call error:", genError?.message);
 
-      // Handle Quota/Rate Limit gracefully with a high-fidelity intelligent response
       const isQuota = String(genError?.message).includes("429") || String(genError?.message).includes("RESOURCE_EXHAUSTED");
       
-      return res.status(200).json({
-        success: true,
-        isFallback: true,
-        text: `### 🔍 تقرير الوكيل الاستخباراتي لأنمي بلاك\n\nبناءً على الفحص والتدقيق حول: **"${cleanPrompt}"**:\n\n1. **التحليل الفوري:** يتم تتبع أحدث المستجدات من المصادر الرسمية (Anime News Network، Comic Natalie، حسابات X الرسمية للاستوديوهات).\n2. **الحالة الحالية:** المعلومات المتداولة حول هذا العنوان تشهد تفاعلاً كبيراً في مجتمعات الأوتاكو العالمية، والتقارير تشير إلى تأكيدات قريبة من لجان الإنتاج اليابانية.\n3. **نصيحة المتابعة:** يُنصح دائماً بمتابعة الحسابات الرسمية أو قسم الأخبار المباشر داخل أنمي بلاك للحصول على الإعلانات المختومة فور اعتمادها.`,
-        citations: [
-          { title: "Anime News Network (ANN)", url: "https://www.animenewsnetwork.com", domain: "animenewsnetwork.com" },
-          { title: "Crunchyroll News", url: "https://www.crunchyroll.com/news", domain: "crunchyroll.com" },
-          { title: "MyAnimeList Industry News", url: "https://myanimelist.net/news", domain: "myanimelist.net" }
-        ],
-        webSearchQueries: [cleanPrompt, `${cleanPrompt} anime release date 2026`, `${cleanPrompt} official studio announcement`],
-        notice: isQuota ? "تم استخدام التحليل المجمّع نظراً لكثافة الاستعلامات اللحظية على شبكة البحث." : null,
+      // Honest failure response - NEVER fabricate fake article content or fake citations
+      return res.status(503).json({
+        success: false,
+        error: isQuota 
+          ? "خدمة البحث الذكي بلغت الحد الأقصى للاستعلامات حالياً (429 Quota Limit). يرجى المحاولة بعد قليل."
+          : "خدمة الذكاء الاصطناعي غير متاحة حالياً بسبب خطأ في مزود الخدمة الخارجي.",
+        code: isQuota ? "QUOTA_EXHAUSTED" : "AI_SERVICE_UNAVAILABLE",
+        details: genError?.message || "External AI service unavailable",
         timestamp: Date.now(),
       });
     }
@@ -169,6 +165,184 @@ app.post("/api/gemini/search-agent", async (req, res) => {
       error: "حدث خطأ أثناء معالجة استعلام البحث المباشر.",
       details: err?.message,
     });
+  }
+});
+
+// Real Anime Metadata Endpoints (AniList GraphQL + Jikan REST Fallback)
+app.get("/api/anime/search", async (req, res) => {
+  const query = (req.query.q || "").toString().trim();
+  const page = parseInt(req.query.page, 10) || 1;
+  const perPage = Math.min(parseInt(req.query.perPage, 10) || 20, 50);
+
+  if (!query) {
+    return res.json({ success: true, items: [], page: 1, hasNextPage: false, total: 0 });
+  }
+
+  try {
+    // 1. Try AniList GraphQL
+    const gqlQuery = `
+      query ($search: String, $page: Int, $perPage: Int) {
+        Page (page: $page, perPage: $perPage) {
+          pageInfo { hasNextPage total }
+          media (search: $search, type: ANIME, sort: POPULARITY_DESC) {
+            id
+            title { romaji english native userPreferred }
+            coverImage { extraLarge large medium }
+            bannerImage
+            description(asHtml: false)
+            format status episodes duration genres averageScore popularity seasonYear season source
+          }
+        }
+      }
+    `;
+
+    const aniRes = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query: gqlQuery, variables: { search: query, page, perPage } }),
+    });
+
+    if (aniRes.ok) {
+      const json = await aniRes.json();
+      const pageData = json.data?.Page;
+      return res.json({
+        success: true,
+        provider: "anilist",
+        page,
+        hasNextPage: !!pageData?.pageInfo?.hasNextPage,
+        total: pageData?.pageInfo?.total,
+        items: (pageData?.media || []).map(m => ({ ...m, provider: "anilist" })),
+      });
+    }
+
+    // 2. Fallback to Jikan REST API
+    const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&page=${page}&limit=${perPage}`);
+    if (jikanRes.ok) {
+      const jikanJson = await jikanRes.json();
+      const items = (jikanJson.data || []).map(d => ({
+        id: d.mal_id,
+        title: { romaji: d.title, english: d.title_english, native: d.title_japanese, userPreferred: d.title },
+        coverImage: {
+          extraLarge: d.images?.webp?.large_image_url || d.images?.jpg?.large_image_url,
+          large: d.images?.webp?.image_url || d.images?.jpg?.image_url,
+          medium: d.images?.webp?.small_image_url || d.images?.jpg?.small_image_url,
+        },
+        bannerImage: null,
+        description: d.synopsis,
+        format: d.type,
+        status: d.status,
+        episodes: d.episodes,
+        duration: d.duration ? parseInt(d.duration, 10) || null : null,
+        genres: (d.genres || []).map(g => g.name),
+        averageScore: d.score ? Math.round(d.score * 10) : null,
+        popularity: d.popularity,
+        seasonYear: d.year,
+        season: d.season,
+        source: d.source,
+        provider: "jikan",
+      }));
+
+      return res.json({
+        success: true,
+        provider: "jikan",
+        page,
+        hasNextPage: !!jikanJson.pagination?.has_next_page,
+        total: jikanJson.pagination?.items?.total,
+        items,
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      error: "تعذر جلب بيانات الأنمي من المزودات الخارجية حالياً.",
+      provider: "failed",
+    });
+  } catch (err) {
+    console.error("Anime search route error:", err);
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.get("/api/anime/trending", async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const perPage = Math.min(parseInt(req.query.perPage, 10) || 20, 50);
+
+  try {
+    const gqlQuery = `
+      query ($page: Int, $perPage: Int) {
+        Page (page: $page, perPage: $perPage) {
+          pageInfo { hasNextPage total }
+          media (type: ANIME, sort: TRENDING_DESC) {
+            id
+            title { romaji english native userPreferred }
+            coverImage { extraLarge large medium }
+            bannerImage
+            description(asHtml: false)
+            format status episodes duration genres averageScore popularity seasonYear season source
+          }
+        }
+      }
+    `;
+
+    const aniRes = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query: gqlQuery, variables: { page, perPage } }),
+    });
+
+    if (aniRes.ok) {
+      const json = await aniRes.json();
+      const pageData = json.data?.Page;
+      return res.json({
+        success: true,
+        provider: "anilist",
+        page,
+        hasNextPage: !!pageData?.pageInfo?.hasNextPage,
+        total: pageData?.pageInfo?.total,
+        items: (pageData?.media || []).map(m => ({ ...m, provider: "anilist" })),
+      });
+    }
+
+    // Jikan fallback for top airing
+    const jikanRes = await fetch(`https://api.jikan.moe/v4/top/anime?filter=airing&page=${page}&limit=${perPage}`);
+    if (jikanRes.ok) {
+      const jikanJson = await jikanRes.json();
+      const items = (jikanJson.data || []).map(d => ({
+        id: d.mal_id,
+        title: { romaji: d.title, english: d.title_english, native: d.title_japanese, userPreferred: d.title },
+        coverImage: {
+          extraLarge: d.images?.webp?.large_image_url || d.images?.jpg?.large_image_url,
+          large: d.images?.webp?.image_url || d.images?.jpg?.image_url,
+          medium: d.images?.webp?.small_image_url || d.images?.jpg?.small_image_url,
+        },
+        bannerImage: null,
+        description: d.synopsis,
+        format: d.type,
+        status: d.status,
+        episodes: d.episodes,
+        duration: d.duration ? parseInt(d.duration, 10) || null : null,
+        genres: (d.genres || []).map(g => g.name),
+        averageScore: d.score ? Math.round(d.score * 10) : null,
+        popularity: d.popularity,
+        seasonYear: d.year,
+        season: d.season,
+        source: d.source,
+        provider: "jikan",
+      }));
+
+      return res.json({
+        success: true,
+        provider: "jikan",
+        page,
+        hasNextPage: !!jikanJson.pagination?.has_next_page,
+        total: jikanJson.pagination?.items?.total,
+        items,
+      });
+    }
+
+    res.status(502).json({ success: false, error: "تعذر جلب الأنميات الشائعة حالياً." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err?.message });
   }
 });
 
@@ -197,11 +371,11 @@ app.get("/api/admin/metrics", (req, res) => {
   const mem = process.memoryUsage();
   const avgLatency = latencySamples.length > 0
     ? Math.round(latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length)
-    : 18;
+    : null;
   
   const cacheRatio = totalRequests > 0
     ? ((staticCacheHits / totalRequests) * 100).toFixed(1) + "%"
-    : "95.0%";
+    : "0.0%";
 
   res.json({
     success: true,
@@ -217,7 +391,7 @@ app.get("/api/admin/metrics", (req, res) => {
       cacheHitRatio: cacheRatio,
       apiAvgLatencyMs: avgLatency,
       totalRequestsMeasured: totalRequests,
-      firestoreConnection: "ACTIVE_REALTIME",
+      activeLatencySamplesCount: latencySamples.length,
       timestamp: Date.now()
     },
   });

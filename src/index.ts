@@ -6,6 +6,7 @@ import { syncEngine } from './sync/syncEngine';
 import { cacheManager } from './cache/cacheManager';
 import { FCMNotificationManager } from './notifications/fcmManager';
 import { MetricsCollector } from './admin/metricsCollector';
+import { animeService, AniListProvider, JikanProvider } from './services/animeProvider';
 
 // Initialize global observability
 observability.init();
@@ -27,7 +28,10 @@ export {
   syncEngine,
   cacheManager,
   FCMNotificationManager,
-  MetricsCollector
+  MetricsCollector,
+  animeService,
+  AniListProvider,
+  JikanProvider
 };
 
 // Global Browser Bridge (Window Object Compatibility)
@@ -48,6 +52,9 @@ if (typeof window !== 'undefined') {
     syncEngine,
     cacheManager,
     FCMNotificationManager,
-    MetricsCollector
+    MetricsCollector,
+    animeService,
+    AniListProvider,
+    JikanProvider
   };
 }

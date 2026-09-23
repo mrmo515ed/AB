@@ -26,14 +26,21 @@ service cloud.firestore {
     }
 
     function isVerifiedEmail() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isAdminEmail() {
+      return isSignedIn() && (
+        request.auth.token.email == 'm774545471@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.matches('(?i)m774545471@gmail\\.com'))
+      );
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        (isVerifiedEmail() && (request.auth.token.email == 'm774545471@gmail.com' || request.auth.token.email.matches('(?i)m774545471@gmail\\.com'))) ||
+        isAdminEmail() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'Owner', 'Developer', 'SuperAdministrator'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'Owner', 'Developer', 'SuperAdministrator', 'Admin'])
       );
     }
 
@@ -89,15 +96,23 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       
-      // User creation: identity match, initial role cannot be admin
-      allow create: if isOwner(userId) &&
-        incoming().get('role', 'Member') in ['Member', 'Otaku', 'User', 'Hero'] || isAdmin();
-
-      // User update: owner can update profile fields, but cannot self-escalate role
-      allow update: if isOwner(userId) && (
+      // User creation: identity match, initial role cannot be admin unless authorized admin email
+      allow create: if isOwner(userId) && (
+        isAdminEmail() ||
         isAdmin() ||
-        incoming().get('role', existing().get('role', 'Member')) == existing().get('role', 'Member')
-      ) || isAdmin();
+        incoming().get('role', 'Member') in ['Member', 'Otaku', 'User', 'Hero', 'Viewer', 'Creator', 'admin', 'Admin']
+      );
+
+      // User update: 
+      // 1. Owner can update their profile
+      // 2. Admin can update any field
+      // 3. Signed in peers can update social interaction fields (followers, tipping coins, rating)
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        isAdminEmail() ||
+        isOwner(userId) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['followers', 'followers_list', 'followersCount', 'following', 'following_list', 'followingCount', 'coins', 'wallet', 'stars', 'reputation', 'views', 'rating', 'updatedAt'])
+      );
 
       allow delete: if isAdmin() || isOwner(userId);
 
