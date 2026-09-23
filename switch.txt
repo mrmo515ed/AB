@@ -1,0 +1,46 @@
+  try {
+    localStorage.setItem("animeblack_global_saved_accounts_v2", JSON.stringify(S.savedAccounts));
+  } catch(e){}
+}
+
+function openAccountSwitcher(){
+  ensureAccounts();
+  openSheet('accountSwitcherSheet');
+}
+
+function switchSavedAccountByIndex(idx){
+  ensureAccounts();
+  const list = S.savedAccounts || [];
+  if(idx < 0 || idx >= list.length){
+    toast("الحساب غير متواجد في القائمة المحفوظة", "err");
+    return;
+  }
+  const target = list[idx];
+  closeOvl();
+  performSwitch(target);
+}
+
+function switchSavedAccount(accIdOrEmail){
+  ensureAccounts();
+  const target = (S.savedAccounts||[]).find(a => a && (a.id === accIdOrEmail || a.uid === accIdOrEmail || (a.email && a.email.toLowerCase() === String(accIdOrEmail).toLowerCase()) || a.username === accIdOrEmail));
+  if(!target){
+    toast("الحساب غير متواجد في القائمة المحفوظة", "err");
+    return;
+  }
+  closeOvl();
+  performSwitch(target);
+}
+
+function removeSavedAccountByIndex(idx){
+  ensureAccounts();
+  const list = S.savedAccounts || [];
+  if(idx < 0 || idx >= list.length) return;
+  const removed = list[idx];
+  const curId = S.activeAccountId || (S.me && (S.me.id || S.me.uid)) || "me";
+  const isCur = (removed.id === curId || removed.uid === curId);
+  list.splice(idx, 1);
+  try {
+    localStorage.setItem("animeblack_global_saved_accounts_v2", JSON.stringify(list));
+  } catch(e){}
+  save();
+  toast("تمت إزالة الحساب (" + (removed.name || removed.email || removed.username) + ") من هذا الجهاز", "info");

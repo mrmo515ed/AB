@@ -1,0 +1,2 @@
+sed -i 's/.btn-primary{background:var(--grad-fire);color:#fff;border-color:rgba(251,191,36,.35);box-shadow:0 4px 16px rgba(34,211,238,.35)}/.btn-primary{background:var(--grad-fire);color:#fff;border:none;box-shadow:0 4px 20px rgba(34,211,238,0.25)}/g' index.html
+sed -i 's/.btn-sec{background:var(--surface2);color:var(--text);border-color:var(--line2);font-weight:700}/.btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--line2);font-weight:700}/g' index.html

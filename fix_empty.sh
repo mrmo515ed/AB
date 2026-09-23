@@ -1,0 +1,1 @@
+sed -i 's/function emptyState(icon,txt,sub){return `<div class="empty" style="position:relative">/function emptyState(icon,txt,sub){return `<div class="empty" style="position:relative;background:var(--surface2);border-radius:var(--r);padding:40px 20px;border:1px solid var(--line2);box-shadow:0 4px 15px rgba(0,0,0,0.05)">/g' index.html

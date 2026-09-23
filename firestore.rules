@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function getUserRole() {
+      return (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))) ?
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') : '';
+    }
+    function isAdmin() {
+      return isSignedIn() && (
+        ('email' in request.auth.token && (request.auth.token.email == 'm774545471@gmail.com' || request.auth.token.email.matches('(?i)m774545471@gmail\\.com'))) ||
+        getUserRole() in ['admin', 'Owner', 'Developer', 'SuperAdministrator']
+      );
+    }
+    function isMod() {
+      return isAdmin() || (isSignedIn() && getUserRole() in ['Moderator', 'SeniorModerator', 'SuperAdministrator']);
+    }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin() || isOwner(userId);
+      match /{allUserData=**} {
+        allow read: if true;
+        allow write: if true;
+      }
+    }
+
+    match /user_states/{userId} {
+      allow read, write: if true;
+    }
+
+    match /sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if (isSignedIn() && resource.data.authorId == request.auth.uid) || isMod() || true;
+    }
+    
+    match /scheduled_posts/{postId} {
+      allow read, write: if true;
+    }
+
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isMod() || true;
+    }
+
+    match /reels/{reelId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if (isSignedIn() && resource.data.authorId == request.auth.uid) || isMod() || true;
+    }
+
+    match /server_status/{docId} {
+      allow read, write: if true;
+    }
+    match /server_health/{docId} {
+      allow read, write: if true;
+    }
+    match /serverHealth/{docId} {
+      allow read, write: if true;
+    }
+    match /system_status/{docId} {
+      allow read, write: if true;
+    }
+    match /system_health/{docId} {
+      allow read, write: if true;
+    }
+
+    match /chats/{chatId} {
+      allow read, write: if true;
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+
+    match /chat_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    match /groups/{groupId} {
+      allow read, write: if true;
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+
+    match /communities/{communityId} {
+      allow read, write: if true;
+      match /channels/{channelId}/messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+
+    match /worlds/{worldId} {
+      allow read, write: if true;
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+    
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
+
+    match /broadcasts/{bcId} {
+      allow read, write: if true;
+    }
+
+    match /workspaces/{userId}/thoughts/{thoughtId} {
+      allow read, write: if true;
+    }
+    
+    match /calls/{callId} {
+      allow read, write: if true;
+    }
+
+    match /app_visual_config/{configId} { allow read, write: if true; }
+    match /themes/{themeId} { allow read, write: if true; }
+    match /theme_versions/{versionId} { allow read, write: if true; }
+    match /published_versions/{versionId} { allow read, write: if true; }
+    match /drafts/{draftId} { allow read, write: if true; }
+    match /badges/{badgeId} { allow read, write: if true; }
+    match /level_badges/{badgeId} { allow read, write: if true; }
+    match /level_mappings/{mappingId} { allow read, write: if true; }
+    match /badge_assignments/{assignmentId} { allow read, write: if true; }
+    match /store_items/{itemId} { allow read, write: if true; }
+    match /assets/{assetId} { allow read, write: if true; }
+    match /icons/{iconId} { allow read, write: if true; }
+    match /buttons/{btnId} { allow read, write: if true; }
+    match /components/{compId} { allow read, write: if true; }
+    match /page_configs/{pageId} { allow read, write: if true; }
+    match /game_profiles/{userId} { allow read, write: if true; }
+    match /game_matches/{matchId} { allow read, write: if true; }
+    match /game_leaderboard/{boardId} { allow read, write: if true; }
+    match /game_events/{eventId} { allow read, write: if true; }
+    match /game_config/{configId} { allow read, write: if true; }
+    match /game_admin_logs/{logId} { allow read, write: if true; }
+    match /game_anti_cheat_logs/{logId} { allow read, write: if true; }
+    match /audit_logs/{logId} { allow read, write: if true; }
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

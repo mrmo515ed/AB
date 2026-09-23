@@ -1,0 +1,22 @@
+{
+  "name": "anime-black",
+  "version": "1.0.0",
+  "description": "Anime Black V7",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "mkdir -p dist && cp index.html server.js manifest.json sw.js pwa-*.png apple-touch-icon.png icon.svg firebase-applet-config.json dist/ 2>/dev/null || true",
+    "lint": "echo 'No linting required for vanilla JS'"
+  },
+  "dependencies": {
+    "@google/genai": "^2.24.0",
+    "acorn": "^8.18.0",
+    "express": "^5.2.1",
+    "puppeteer": "^25.10.0",
+    "serve": "^14.2.4"
+  },
+  "devDependencies": {
+    "@babel/parser": "^8.0.5"
+  }
+}

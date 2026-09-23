@@ -1,0 +1,6 @@
+{
+  "name": "Anime Black — أنمي بلاك",
+  "description": "شبكة الأوتاكو الشاملة — أنمي، مانجا، مجتمعات، ألعاب واربح، وقصص في تطبيق واحد",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

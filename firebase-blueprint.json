@@ -1,0 +1,284 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account profile and stats",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "avatar": { "type": "string" },
+        "bio": { "type": "string" },
+        "role": { "type": "string" },
+        "level": { "type": "number" },
+        "coins": { "type": "number" },
+        "stars": { "type": "number" },
+        "reputation": { "type": "number" },
+        "followers": { "type": "number" },
+        "following": { "type": "number" },
+        "joined": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Social post shared by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "type": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "authorId", "type", "createdAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "Short 24-hour story",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "createdAt"]
+    },
+    "Reel": {
+      "title": "Reel",
+      "description": "Short video or clip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "authorId", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Direct chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "senderId", "text", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "type", "createdAt"]
+    },
+    "Thought": {
+      "title": "Thought",
+      "description": "Private thought in user workspace",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "maxLength": 10000 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["text", "createdAt"]
+    },
+    "Test": {
+      "title": "Test",
+      "description": "Connection test document",
+      "type": "object",
+      "properties": {
+        "ok": { "type": "boolean" }
+      }
+    },
+    "World": {
+      "title": "World",
+      "description": "Anime World channel and messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "members": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      }
+    },
+    "LevelBadge": {
+      "title": "LevelBadge",
+      "description": "Custom designed level badge with cropped asset and styles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "desc": { "type": "string" },
+        "image": { "type": "string" },
+        "color": { "type": "string" },
+        "glow": { "type": "boolean" },
+        "shape": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "image"]
+    },
+    "LevelMapping": {
+      "title": "LevelMapping",
+      "description": "Mapping from user levels to custom level badges",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "mappings": { "type": "object" },
+        "updatedAt": { "type": "number" }
+      }
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Active user login session tracking",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "startTime": { "type": "number" },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["sessionId", "userId"]
+    },
+    "UserState": {
+      "title": "UserState",
+      "description": "Detailed persistent user state including history and drafts",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid"]
+    },
+    "ChatRequest": {
+      "title": "ChatRequest",
+      "description": "Pending direct chat requests between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromUid": { "type": "string" },
+        "toUid": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "fromUid", "toUid"]
+    }
+  },
+  "firestore": {
+    "/test/{docId}": {
+      "schema": "Test",
+      "description": "Connection test document for health validation"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public user profiles"
+    },
+    "/user_states/{userId}": {
+      "schema": "UserState",
+      "description": "Private user state, favorites, and watch history"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "User active login sessions"
+    },
+    "/chat_requests/{requestId}": {
+      "schema": "ChatRequest",
+      "description": "Direct message connection requests"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Community posts"
+    },
+    "/stories/{storyId}": {
+      "schema": "Story",
+      "description": "Community stories"
+    },
+    "/reels/{reelId}": {
+      "schema": "Reel",
+      "description": "Community reels"
+    },
+    "/chats/{chatId}": {
+      "schema": "ChatMessage",
+      "description": "Direct chat rooms"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Direct chat messages"
+    },
+    "/groups/{groupId}": {
+      "schema": "ChatMessage",
+      "description": "Group rooms"
+    },
+    "/groups/{groupId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Group chat messages"
+    },
+    "/communities/{communityId}/channels/{channelId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Community channel messages"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/workspaces/{userId}/thoughts/{thoughtId}": {
+      "schema": "Thought",
+      "description": "Private thoughts saved by user"
+    },
+    "/worlds/{worldId}": {
+      "schema": "World",
+      "description": "Anime world details and member stats"
+    },
+    "/worlds/{worldId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Anime world messages"
+    },
+    "/app_visual_config/{configId}": {
+      "schema": "VisualConfig",
+      "description": "Published app visual design configuration"
+    },
+    "/themes/{themeId}": {
+      "schema": "ThemeItem",
+      "description": "Custom and ready-made themes"
+    },
+    "/published_versions/{versionId}": {
+      "schema": "VersionItem",
+      "description": "Immutable version history snapshots for design publishing and rollback"
+    },
+    "/badges/{badgeId}": {
+      "schema": "BadgeItem",
+      "description": "Universal badges and cosmetic achievements"
+    },
+    "/store_items/{itemId}": {
+      "schema": "StoreItemDef",
+      "description": "Store cosmetic items, frames, decorations"
+    },
+    "/assets/{assetId}": {
+      "schema": "AssetItem",
+      "description": "Uploaded image and icon asset metadata"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLogItem",
+      "description": "Immutable audit log of all owner actions"
+    },
+    "/level_badges/{badgeId}": {
+      "schema": "LevelBadge",
+      "description": "Custom designed level badges"
+    },
+    "/level_mappings/{mappingId}": {
+      "schema": "LevelMapping",
+      "description": "Level badge mappings configuration"
+    }
+  }
+}

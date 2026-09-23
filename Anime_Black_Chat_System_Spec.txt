@@ -1,0 +1,1196 @@
+ANIME BLACK — COMPLETE CHAT SYSTEM SPECIFICATION
+=================================================
+
+PURPOSE
+-------
+Build, repair, integrate, and fully connect the Anime Black chat system as ONE unified production system.
+This document is a complete specification for the chat feature and its internal logic.
+
+ABSOLUTE RULES
+--------------
+1. DO NOT delete, remove, replace, disable, downgrade, simplify, skip, hide, or break any existing feature, page, button, option, event, ID, route, component, API, backend connection, database field, or working behavior.
+2. Existing features not explicitly mentioned in this document MUST remain intact and functional. They are reserved for future development.
+3. Treat this document as an ADDITIVE + REPAIR + INTEGRATION specification, not a rewrite that removes existing functionality.
+4. Before modifying code, inspect and understand the existing chat system, database, backend, models, navigation, screens, events, permissions, existing options, and current UI.
+5. Preserve existing IDs, routes, database references, API contracts, event names, and public interfaces whenever possible. If a migration is necessary, provide compatibility instead of silently breaking old data.
+6. Do not create mock data, fake persistence, fake realtime, fake uploads, fake GIFs, fake voice recording, or placeholder buttons where real functionality is expected.
+7. Use the existing backend/database/server architecture already connected to the project. If Firebase is already used, keep Firebase. Do not replace the backend unless absolutely required and compatible.
+8. Every newly implemented feature must be connected to the real backend/database/storage and realtime synchronization where applicable.
+9. Test every modified feature and integration path. Do not finish with compile-only validation.
+10. Fix the root cause, not only the visible symptom.
+
+CORE ARCHITECTURE PRINCIPLE
+---------------------------
+The chat system must have ONE central message/conversation architecture.
+Do not create independent sender/receiver/direction/sync logic for text, image, video, file, voice, GIF, sticker, location, contact, or other message types.
+
+Central architecture:
+Conversation Engine
+    -> Message Engine
+        -> Content / Attachment Engine
+        -> Message Renderer
+        -> Sync Engine
+        -> Status / Reaction / Reply / Edit / Delete / Schedule logic
+
+The same message engine decides:
+- sender
+- recipient/conversation
+- isMine
+- message direction
+- alignment
+- bubble style
+- content type
+- attachments
+- status
+- reactions
+- reply
+- edit/delete state
+- scheduling state
+- realtime synchronization
+- deduplication
+- ordering
+
+MESSAGE MODEL
+-------------
+Every message must have a stable unified model containing at minimum:
+- messageId
+- clientMessageId
+- conversationId
+- senderId
+- createdAt
+- updatedAt
+- type
+- text/content
+- attachments[]
+- replyToMessageId
+- quotedMessage metadata when required
+- forwardedFrom when supported
+- mentions[]
+- reactions[]
+- status
+- isEdited
+- isDeleted
+- isScheduled
+- scheduledAt
+- metadata
+
+Supported message types should include the current project's types plus:
+- TEXT
+- MEDIA
+- FILE
+- VOICE
+- GIF
+- STICKER
+- LOCATION
+- CONTACT
+- SYSTEM_EVENT
+- POLL when already supported or present in the project
+- REPOST when already supported or present in the project
+- QUOTE when already supported or present in the project
+- any other existing project message type
+
+IMPORTANT: Never remove an existing type merely because it is not listed above.
+
+CONVERSATION MODEL
+------------------
+Every conversation must have a stable conversationId.
+Keep existing conversation types and support as applicable:
+- PRIVATE
+- GROUP
+- GUILD
+- CHANNEL
+
+The conversation model should preserve existing fields and may include:
+- participants
+- type
+- createdAt
+- updatedAt
+- lastMessageId
+- lastMessagePreview
+- background/wallpaper metadata
+- settings
+- existing permissions
+- existing moderation configuration
+- any current project fields
+
+SENDER / RECEIVER / MESSAGE DIRECTION
+-------------------------------------
+Determine direction ONLY from message ownership, never from content type.
+
+isMine = (message.senderId == currentUserId)
+
+If isMine = true:
+- render as sender/self message
+- align to sender side according to the current language direction rules
+
+If isMine = false:
+- render as receiver/other-user message
+- align to receiver side according to the current language direction rules
+
+Apply the exact same ownership/direction logic to:
+- text
+- images
+- video
+- files
+- voice
+- GIF
+- stickers
+- location
+- contact
+- repost
+- quote
+- poll
+- mixed attachments
+- system-supported additional message types
+
+Do NOT implement separate direction logic for different content types.
+
+RTL / LTR
+---------
+Separate message ownership from UI language direction.
+Support Arabic RTL and English LTR correctly.
+Correct all direction-aware UI elements:
+- back arrow
+- forward arrow
+- chevrons
+- navigation arrows
+- reply indicator
+- forward indicator
+- swipe actions
+- message alignment
+- attachment layout direction where appropriate
+- text alignment
+- menus
+- bottom sheets
+- search UI
+- input area
+
+Do not hardcode visual arrow characters if the existing UI framework provides direction-aware icons/components.
+
+MESSAGE SENDING PIPELINE
+------------------------
+Every send operation should follow a stable flow:
+1. Validate the message and permissions locally.
+2. Create a clientMessageId before server submission.
+3. Create an optimistic local pending message where appropriate.
+4. Upload required attachments to real storage.
+5. Create/update the server message with real metadata.
+6. Receive the authoritative server messageId/timestamp.
+7. Reconcile/replace the temporary local message instead of creating a duplicate.
+8. Update conversation last-message metadata.
+9. Update the UI without rebuilding the entire chat unnecessarily.
+10. Realtime listeners must recognize the already-created message and not duplicate it.
+
+MESSAGE DEDUPLICATION
+---------------------
+Every send must support idempotency/deduplication.
+Use clientMessageId and/or the stable server messageId.
+If a retry happens due to weak internet, the same logical message must not appear twice.
+
+MESSAGE STATUS
+--------------
+Support the existing project's statuses and, where applicable:
+- SENDING
+- SENT
+- DELIVERED
+- READ
+- FAILED
+- SCHEDULED
+- CANCELED
+
+Failed messages must remain visible and offer retry when supported.
+Retry must not create duplicates.
+
+SCROLL SYSTEM
+-------------
+Build a smart scroll system.
+Never reset or jump to the top when sending or receiving messages.
+
+Rules:
+- If the user is already near the bottom, new messages may auto-scroll to the newest message.
+- If the user is reading older messages, do NOT move their viewport.
+- Show a non-intrusive "new messages" indicator when appropriate.
+- Sending a message must not cause a visible flicker or reset.
+- Loading older messages must preserve the user's visible position.
+- Navigating to a reply/search result should scroll to the target message and preserve context.
+- Do not recreate the entire message list unnecessarily.
+
+For pagination:
+- Use cursor/page based loading.
+- Load a reasonable initial batch.
+- Load older messages on demand.
+- When prepending older messages, preserve the current anchor/visible item position.
+
+ORDERING
+--------
+Use authoritative server timestamps or server ordering.
+When multiple messages arrive rapidly, sort deterministically using server time plus a stable tie-breaker such as messageId or sequence.
+Do not rely only on the device clock.
+
+TEXT MESSAGES
+-------------
+Support:
+- plain text
+- multiline text
+- emoji
+- URLs
+- @usernames
+- mentions
+- hashtags if already supported
+- any existing text formatting currently in the project
+
+LINKS
+-----
+Detect valid links and make them clickable.
+Support preview metadata where the current backend/system supports it.
+Handle unsafe/invalid links safely.
+
+USERNAMES / MENTIONS
+--------------------
+@username should be recognized when supported.
+Clicking a username/mention should open the appropriate profile or existing destination.
+Store mention metadata when required rather than relying only on rendered text.
+Mention data may include:
+- userId
+- start
+- length
+
+REPLY SYSTEM
+------------
+Support replyToMessageId.
+Display a compact preview of the replied-to message.
+Pressing the reply preview should navigate/scroll to the original message.
+Reply must work consistently with text, media, voice, GIF, sticker, file, location, contact, and other supported types.
+
+If a user cancels reply mode, only reply state is cleared; the original message remains unchanged.
+
+REACTIONS / QUICK INTERACTIONS
+------------------------------
+Double tap should trigger the configured quick reaction when enabled.
+Long press should open the reaction/action menu.
+Support configurable reactions according to existing project settings.
+A user reaction should be toggled/changed instead of creating uncontrolled duplicates.
+Reactions must sync in realtime when supported.
+
+LONG PRESS MENU
+---------------
+Inspect every option currently present in the project.
+Keep all existing options.
+Support existing actions where available, including as applicable:
+- Reply
+- React
+- Edit
+- Copy
+- Forward
+- Save
+- Delete
+- Select
+- Report
+- More
+
+Do not assume these are the only options. Existing project options must remain.
+
+EDIT MESSAGE
+------------
+Editing must operate on the real persisted message.
+Suggested flow:
+- enter edit mode
+- populate the composer with the current content
+- modify
+- save
+- persist updatedAt
+- set isEdited = true
+- update realtime UI
+
+Do not create a second fake message for an edit.
+
+DELETE / MESSAGE MANAGEMENT
+---------------------------
+Preserve all existing delete-management behavior.
+If the project supports:
+- Delete for me
+- Delete for everyone
+then enforce the real permissions and backend rules.
+Prefer a safe deletion state such as isDeleted when historical consistency, moderation, reply references, or audit data require it.
+Never simply erase records without checking existing architecture and references.
+
+SCHEDULED MESSAGES
+------------------
+Support real scheduled message persistence.
+A scheduled message should include:
+- isScheduled
+- scheduledAt
+- status
+
+Scheduled messages must execute through the server/backend scheduler or existing reliable backend mechanism, not only while the client is open.
+Provide the existing scheduling UI and preserve all current options.
+Where supported, allow:
+- view scheduled
+- edit
+- reschedule
+- send now
+- cancel
+- delete
+
+Do not duplicate scheduled messages.
+
+ATTACHMENT ARCHITECTURE
+-----------------------
+Use a unified attachments[] array within the Message model.
+All attachment types should flow through the same attachment pipeline.
+Supported attachments may include:
+- image
+- video
+- file
+- audio/voice
+- GIF
+- sticker
+- location metadata
+- contact metadata
+- other existing project-supported attachments
+
+Do not create separate incompatible message pipelines for each type.
+
+MULTIPLE ATTACHMENTS IN ONE MESSAGE
+------------------------------------
+A single send action must create ONE message when the user intentionally selects multiple attachments for one message.
+Example:
+5 images + caption = 1 message with 5 attachments + text.
+
+Do NOT send:
+image1 = message 1
+image2 = message 2
+image3 = message 3
+image4 = message 4
+image5 = message 5
+
+Instead:
+Message
+  attachments = [image1, image2, image3, image4, image5]
+  text = caption
+
+The same principle should be used for any combination of attachment types that the current project explicitly supports in one message.
+
+MEDIA PICKER FLOW
+-----------------
+Selecting media must NOT automatically send it.
+Flow:
+Open picker
+ -> select media
+ -> preview selected items above composer
+ -> add/remove items
+ -> reorder items
+ -> add caption/text
+ -> confirm/send
+
+Support up to 5 images when that is the requested project limit.
+Do not silently reduce the limit without a project/backend reason.
+
+MEDIA PREVIEW / REORDER
+-----------------------
+Before send, allow where supported:
+- preview
+- remove
+- add more
+- reorder
+- caption
+- cancel
+
+The final attachment order must match the confirmed UI order.
+
+IMAGES
+------
+Support real upload and rendering.
+Use appropriate thumbnails/caching/compression without destroying quality.
+Media grids should adapt to the number of images.
+Suggested rendering:
+- 1 image: single large preview
+- 2 images: two-column layout
+- 3 images: balanced grid
+- 4 images: 2x2
+- 5 images: balanced grid/row with the fifth item clearly visible
+
+Do not force every image into a full-width huge card.
+
+IMAGE VIEWER
+------------
+When opened, support current project behavior such as:
+- zoom
+- swipe between media
+- download
+- share
+- close
+- additional existing actions
+
+VIDEO
+-----
+Support real video upload and playback.
+Where appropriate:
+- thumbnail
+- duration
+- play/pause
+- mute/unmute
+- fullscreen
+- download
+- share
+- upload progress
+- retry on failure
+
+FILES
+-----
+Persist real file metadata such as:
+- fileName
+- mimeType
+- size
+- storagePath/reference
+- URL when appropriate
+- thumbnail where applicable
+
+Support:
+- preview/open
+- download
+- progress
+- retry
+- proper error state
+
+Do not rely on unstable temporary URLs where the project's architecture requires persistent access.
+
+VOICE MESSAGES
+--------------
+Implement REAL voice recording.
+The microphone button must not be a fake send action.
+
+Recording flow:
+- request microphone permission when needed
+- start recording
+- update elapsed duration
+- show recording state
+- allow pause/resume where supported
+- allow swipe-to-cancel
+- allow stop/finish
+- preview before send where the current design requires confirmation
+- show duration
+- play/pause preview
+- delete/cancel
+- upload real audio to storage
+- create one real voice message
+
+Swipe-to-cancel:
+- show clear cancel guidance
+- detect a valid swipe threshold
+- cancel safely
+- delete temporary recording
+- restore composer state
+
+VOICE WAVEFORM
+--------------
+Use a waveform visualization where appropriate.
+The waveform must not interfere with the message playback or chat scroll system.
+
+GIF SYSTEM
+----------
+Implement a REAL GIF experience, not placeholders.
+Support the configured real GIF provider/API already used or intended by the project.
+
+GIF features:
+- open GIF picker
+- search
+- browse
+- trending/categories where provider supports them
+- preview
+- select
+- send
+- render inside the conversation
+- retry/error state
+
+The sent GIF must be represented in the unified Message model.
+
+STICKERS
+--------
+Provide an independent Stickers section while preserving any current sticker UI.
+Support as applicable:
+- sticker packs
+- browse packs
+- install/add pack
+- remove pack
+- favorites
+- recent stickers
+- preview
+- send
+
+A sticker should reference stable pack/sticker information instead of storing arbitrary UI-only state.
+
+LOCATION
+--------
+Support real location messages where already allowed by the project.
+Metadata may include:
+- latitude
+- longitude
+- label
+- address
+- placeId
+
+Clicking the location should use the project's supported map/location flow.
+
+CONTACT
+-------
+Support real contact sharing where currently implemented or required.
+Store a safe reference/metadata set such as:
+- contactId
+- display name
+- avatar
+- username
+- phone number only where privacy/permission rules allow it
+
+CONTACT messages must obey the same message direction/sync/reaction/reply architecture.
+
+MIXED ATTACHMENTS
+-----------------
+If the project allows multiple attachment types in one send operation, keep them inside the same message:
+attachments[]
+plus optional text/reply/metadata.
+Do not create unrelated messages from one intentional send operation.
+
+CHAT BACKGROUND / WALLPAPER
+---------------------------
+Support existing ready-made backgrounds and current chat appearance options.
+Also support upload from phone where the project allows it.
+
+Wallpaper flow:
+select
+ -> preview
+ -> confirm
+ -> upload/store reference if needed
+ -> persist conversation appearance
+ -> realtime sync to participants
+ -> create system event when required
+
+If the requirement is that the background applies to both participants, store it at conversation level instead of only local device state.
+
+BUBBLE ADAPTATION
+-----------------
+Message bubbles must remain readable over different wallpapers.
+Use contrast-aware UI decisions where appropriate while preserving the Anime Black visual identity.
+Do not make text unreadable on bright or complex backgrounds.
+
+SYSTEM EVENTS INSIDE CHAT
+-------------------------
+Support a unified non-intrusive system event presentation for chat events.
+Examples:
+- user changed conversation background
+- user opened/entered profile when the project requires event tracking
+- screenshot event where the platform exposes a reliable screenshot signal and project policy permits it
+- other existing chat events
+
+System event appearance should be small, centered, visually consistent, and non-disruptive.
+Do not convert ordinary system events into normal user message bubbles unless the current architecture already does so.
+
+SCREENSHOT EVENT
+----------------
+If screenshot detection is supported by the target platform and current project policy allows it, create the appropriate system event.
+Do not fake detection where the platform cannot reliably provide it.
+
+CHAT HEADER
+-----------
+Redesign/improve the top bar without deleting its current actions.
+It should support the currently available controls, such as:
+- back
+- avatar
+- display name
+- username/status if present
+- online/last seen/typing state
+- voice call
+- video call
+- search
+- more menu
+
+Every current header action must remain functional.
+Do not replace a working action with a visual-only control.
+
+PRESENCE
+--------
+Implement one centralized Presence system shared by:
+- chat header
+- profile
+- user lists
+- anywhere else in the app that displays presence
+
+Possible states:
+- ONLINE
+- AWAY when supported
+- OFFLINE
+- LAST_SEEN
+
+Requirements:
+- update quickly
+- avoid stale cache
+- reconcile server timestamps
+- expire stale presence
+- reflect reconnect/disconnect state
+
+TYPING STATE
+------------
+Typing indicators are transient state, not normal messages.
+They should:
+- update quickly
+- stop after inactivity
+- disappear when the user leaves typing state
+- not create permanent message records
+- not interfere with message ordering
+
+CONNECTION STATE
+----------------
+Support clear network states:
+- CONNECTED
+- CONNECTING
+- DISCONNECTED
+- RECONNECTING
+
+The conversation must continue to display cached/recent data during temporary offline periods where the existing architecture supports it.
+
+OFFLINE / CACHE
+---------------
+Where supported by the current architecture:
+- render cached recent messages quickly
+- connect to realtime backend
+- reconcile changes from server
+- keep drafts locally
+- keep temporary media only as needed
+- do not treat cache as permanent authoritative message storage
+
+SERVER = SOURCE OF TRUTH
+------------------------
+Authoritative server/backend state should determine, where applicable:
+- message existence
+- sender
+- conversation
+- createdAt/server ordering
+- message status
+- reactions
+- read state
+- background state when synchronized
+- scheduled state
+- edit/delete state
+
+LOCAL STATE MAY CONTAIN
+-----------------------
+- draft text
+- temporary media
+- temporary recording
+- UI state
+- scroll state
+- cached recent data
+- pending send state
+- recent/favorite stickers when appropriate
+
+REALTIME SYNCHRONIZATION
+------------------------
+Realtime must cover all relevant chat changes:
+- new messages
+- message edits
+- message deletes
+- reactions
+- read state
+- typing
+- presence
+- background changes
+- system events
+- media metadata/state where applicable
+
+Do not refresh the entire screen for every small change.
+Apply minimal state updates to the changed entity/list item.
+
+FIREBASE / BACKEND
+------------------
+If the project already uses Firebase, preserve it and integrate with the current implementation.
+Recommended roles where applicable:
+- Firebase Authentication: identity/session
+- Firestore or existing database: conversations/messages/metadata/realtime
+- Firebase Storage: images/video/files/voice/stickers/wallpapers as appropriate
+- Cloud Functions or existing backend: server-side scheduled tasks, notifications, trusted timestamps, cleanup, processing where needed
+- FCM: push notifications if currently used
+
+Do not replace an existing functioning backend merely to simplify implementation.
+
+STORAGE RULES
+-------------
+Never put large media binaries directly into the message document/database if the current architecture expects object storage.
+Store media in storage and metadata/reference in the message.
+Validate file type and size.
+Respect access permissions.
+
+UPLOAD PIPELINE
+---------------
+For media/file/audio when appropriate:
+select
+ -> validate
+ -> optionally compress/process
+ -> upload
+ -> obtain stable storage reference
+ -> create/send message
+ -> sync state
+
+Show progress where appropriate.
+Support retry/cancel for long uploads when the current UX supports it.
+
+DOWNLOAD PIPELINE
+-----------------
+download
+ -> permission check
+ -> progress
+ -> save to device
+ -> success/error state
+
+Handle:
+- permission denied
+- network errors
+- missing file
+- storage errors
+
+SEARCH INSIDE CHAT
+------------------
+Preserve existing chat search features and improve if required.
+Support search for:
+- text
+- usernames
+- links
+- media when supported
+- files when supported
+- other existing searchable content
+
+Search result click should navigate to the correct conversation/message and scroll to the message.
+
+MEDIA / FILE MANAGEMENT
+-----------------------
+Preserve any existing shared-media/media-tab/file-tab features.
+Improve them without removing them.
+Provide real references to stored media.
+Avoid duplicate upload records.
+
+THREE-DOT MENU
+--------------
+Audit every current menu option.
+For each option determine:
+- current behavior
+- required page/screen
+- required backend operation
+- required permission
+- realtime requirement
+- error state
+
+If an option needs a separate page and that page does not yet exist, create it without removing unrelated existing pages.
+
+BOTTOM SHEETS / MENUS
+---------------------
+Standardize styling and behavior:
+- consistent corner radius
+- consistent spacing
+- accessible touch targets
+- correct RTL/LTR
+- consistent icon sizes
+- correct loading/error states
+- non-destructive confirmation for destructive actions
+
+Do not introduce visual clutter.
+
+ICONS / VISUAL SYSTEM
+---------------------
+Replace outdated icons where needed, but preserve semantic meaning and existing actions.
+Use a consistent icon family and sizing system.
+Do not use emoji as a substitute for professional UI icons.
+
+MESSAGE BUBBLE DESIGN
+---------------------
+All message types should share the same core Bubble logic:
+- isMine
+- alignment
+- padding
+- shape
+- timestamps
+- status
+- reactions
+- reply preview
+- context actions
+
+Each content renderer may differ visually, but ownership/direction/status logic must remain centralized.
+
+RESPONSIVE CHAT UI
+------------------
+Support the existing Anime Black target layouts across:
+- phone
+- tablet
+- landscape/wider layouts where applicable
+
+Adapt:
+- max message width
+- media grid
+- top bar
+- composer
+- sheets
+- menus
+
+Do not let controls overlap, clip, or become unusable on small screens.
+
+KEYBOARD / COMPOSER BEHAVIOR
+----------------------------
+When keyboard opens:
+- chat should move smoothly
+- composer must remain above keyboard
+- no jump/flicker
+- maintain reasonable scroll position
+
+When sending:
+- clear the composer after accepted send
+- do not jump away from the latest message unexpectedly
+- preserve reply/edit state rules correctly
+
+DRAFTS
+------
+Preserve existing draft functionality.
+Where supported, save draft locally and restore when returning to the conversation.
+Draft must not be accidentally sent as a message.
+
+PERMISSIONS
+-----------
+Request permissions only when needed and handle denial gracefully.
+Possible permissions:
+- microphone
+- camera
+- photos/media
+- files
+- location
+- notifications
+
+Do not crash when permission is denied.
+
+SECURITY
+--------
+Do not trust client UI alone.
+Backend must verify:
+- authenticated user
+- participant membership
+- message ownership
+- edit/delete permission
+- attachment access
+- allowed file type/size
+- role/moderation restrictions where applicable
+
+Respect existing security rules and access policies.
+
+MODERATION / EXISTING PROJECT FEATURES
+---------------------------------------
+The chat system may already contain moderation, reports, restrictions, admin actions, member actions, message reporting, message deletion, blocking, mute, notification filters, or other features.
+ALL SUCH EXISTING FEATURES MUST REMAIN and continue to work.
+Do not remove them because they are not described in this document.
+
+NOTIFICATIONS
+-------------
+Preserve all existing chat notification logic.
+Where applicable:
+- new message notification
+- mention notification
+- reply notification
+- group/channel notification
+- mute/settings rules
+
+Avoid duplicate notifications and respect user settings.
+
+PERFORMANCE
+-----------
+Optimize without changing behavior:
+- lazy rendering
+- pagination
+- image thumbnailing
+- caching
+- asynchronous work
+- efficient list keys
+- stable UI models/state
+- minimal recomposition
+- background upload where appropriate
+
+Do not create unnecessary listener duplication.
+Do not initialize recorders/players/listeners on every recomposition.
+Clean up listeners and resources correctly.
+
+CHAT STATE & COMPONENT RESPONSIBILITIES
+---------------------------------------
+Centralize chat state and use cases such as:
+- loadConversation
+- observeMessages
+- sendMessage
+- sendAttachments
+- editMessage
+- deleteMessage
+- replyToMessage
+- reactToMessage
+- searchMessages
+- loadOlderMessages
+- markRead
+- scheduleMessage
+- retryFailedMessage
+- observe connection state
+
+PRESENCE SERVICE
+----------------
+Centralize:
+- observePresence
+- updatePresence
+- observeTyping
+- setTyping
+- reconnect handling
+
+MEDIA SERVICE
+-------------
+Centralize:
+- select media
+- remove item
+- reorder items
+- preview
+- upload
+- retry
+- cancel
+
+VOICE RECORDER SERVICE
+----------------------
+Centralize:
+- startRecording
+- pauseRecording
+- resumeRecording
+- cancelRecording
+- finishRecording
+- previewRecording
+- deleteRecording
+- sendRecording
+
+REPOSITORY LAYER
+----------------
+Prefer a single ChatRepository or compatible abstraction for chat domain operations instead of having screens call the backend directly in inconsistent ways.
+
+MESSAGE UI MODEL
+----------------
+The renderer should receive a UI model that already contains centralized facts such as:
+- message
+- isMine
+- display direction
+- status
+- attachment layout info
+- reply preview
+- reactions
+- event type
+
+The renderer must not independently invent sender/receiver rules for each content type.
+
+SYSTEM-WIDE INTEGRATION
+-----------------------
+The chat system must connect correctly with any existing:
+- profile system
+- user system
+- notification system
+- settings
+- blocking/muting
+- search
+- media management
+- admin/moderation
+- guild/group/channel systems
+- calls
+- premium/economy limitations if they already exist
+- existing analytics/audit behavior
+- existing navigation
+
+DO NOT break any of those systems.
+
+ERROR STATES
+------------
+Every network/media operation needs appropriate states:
+- loading
+- success
+- empty
+- error
+- retry
+
+Never leave the user on a blank/white broken screen.
+
+OFFLINE RECOVERY TEST
+---------------------
+Test:
+- send while offline
+- reconnect
+- retry
+- realtime reconciliation
+- app restart
+- duplicate prevention
+- ordering
+- pending state
+
+FAST MESSAGE BURST TEST
+-----------------------
+Test multiple rapid messages and mixed media sends.
+Ensure:
+- correct order
+- no duplicates
+- no missing messages
+- correct sender alignment
+- correct timestamps
+- correct status
+
+SCROLL TEST MATRIX
+------------------
+Test:
+- open chat
+- send text
+- send image
+- send 5 images
+- send video
+- send file
+- send voice
+- send GIF
+- send sticker
+- receive message while at bottom
+- receive message while reading old messages
+- load older messages
+- jump to reply
+- jump to search result
+
+No jump/flicker/top reset is allowed.
+
+REALTIME TEST MATRIX
+--------------------
+Device/User A:
+- send message
+- edit
+- delete
+- react
+- background change
+- typing
+- read
+
+Device/User B must receive the correct changes in realtime according to privacy/permissions.
+
+PRESENCE TEST MATRIX
+--------------------
+Test:
+- online
+- backgrounding app
+- leaving app
+- reconnecting
+- disconnecting
+- stale session expiry
+- reopening app
+
+Ensure no stale online state is shown beyond the configured expiration behavior.
+
+MEDIA TEST MATRIX
+-----------------
+Test:
+- 1 image
+- 2 images
+- 5 images
+- reorder
+- remove
+- add caption
+- cancel
+- retry upload
+- open viewer
+- download
+- video playback
+- file open/download
+
+VOICE TEST MATRIX
+-----------------
+Test:
+- permission allowed
+- permission denied
+- start
+- pause/resume if supported
+- cancel by swipe
+- cancel by button
+- finish
+- preview
+- delete
+- send
+- upload failure
+- retry
+- playback
+
+GIF / STICKER TEST MATRIX
+-------------------------
+Test:
+- search
+- browse
+- preview
+- select
+- send
+- realtime receive
+- render
+- retry/error
+- sticker pack add/remove
+- favorites
+- recent
+
+RTL / LTR TEST MATRIX
+---------------------
+Test the entire chat in Arabic and English.
+Verify:
+- message side
+- back arrow
+- chevrons
+- reply arrows
+- menus
+- bottom sheets
+- attachment order where directional
+- input alignment
+- search
+- top bar
+
+BACKWARD COMPATIBILITY
+----------------------
+Before changing database/models:
+- inspect existing fields
+- preserve them
+- migrate safely if necessary
+- keep old records readable
+- keep existing message types readable
+- keep existing routes and IDs working
+
+Do not perform destructive migrations.
+
+EXISTING FEATURES NOT IN THIS FILE
+-----------------------------------
+This document is NOT an exhaustive list of every feature that may exist in Anime Black.
+Anything already implemented in the project but not written here is still REQUIRED and MUST remain.
+
+FINAL ACCEPTANCE CRITERIA
+--------------------------
+The task is only complete when:
+- all existing chat features still work
+- no existing feature was removed
+- no existing page/button/option was silently discarded
+- text/media/file/voice/GIF/sticker/location/contact use the same core message logic
+- sender/receiver direction is correct everywhere
+- Arabic RTL and English LTR are correct
+- attachments can be grouped into one message when selected as one send operation
+- smart scroll works without jumps
+- realtime synchronization works
+- offline/reconnect behavior is safe
+- duplicate messages are prevented
+- presence is current
+- typing works
+- background synchronization works
+- system events work where supported
+- long press and double tap interactions work
+- existing menu options remain functional
+- backend/database/storage are real
+- no mock implementation remains for required production features
+- no white/broken screens remain in modified chat flows
+- all permissions and failures are handled
+- regression tests confirm old functionality is still available
+
+FINAL DEVELOPMENT RULE
+----------------------
+DO NOT interpret missing details in this file as permission to remove an existing feature.
+When there is a conflict between this file and an existing feature, preserve the existing feature and integrate the new behavior safely.
+When unsure, inspect the current implementation first.
+Prefer additive changes, backward-compatible migrations, and reuse of existing working code.
+
+END OF SPECIFICATION
+====================
