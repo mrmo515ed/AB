@@ -62,4 +62,6 @@
     <string name="camera_flash">Flash</string>
     <string name="media_close">Close</string>
     <string name="post_menu_report">Report post</string>
+    <string name="camera_photo">Photo</string>
+    <string name="camera_video">Video</string>
 </resources>

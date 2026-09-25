@@ -32,7 +32,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * AniList GraphQL (primary) with Jikan (MyAnimeList) fallback — the same public providers the web
- * server uses (`/api/anime/*`), called directly so the app works without the Node server.
+ * server uses (the `/api/anime` routes), called directly so the app works without the Node server.
  */
 @Singleton
 class AnimeApi @Inject constructor(

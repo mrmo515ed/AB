@@ -35,3 +35,12 @@ fun compactCount(value: Long): String = when {
 }
 
 fun compactCount(value: Int): String = compactCount(value.toLong())
+
+/** `m:ss` (or `h:mm:ss`) for media durations; always Latin digits so timers don't jump in RTL. */
+fun formatDuration(ms: Long): String {
+    val total = (ms.coerceAtLeast(0) / 1000)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, s) else String.format(java.util.Locale.US, "%d:%02d", m, s)
+}
