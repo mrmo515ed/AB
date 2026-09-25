@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon (Android 13+) monochrome layer: stylised "AB" monogram inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,34 L28,74 L35.5,74 L38.4,64 L49.6,64 L52.5,74 L60,74 L48,34 Z M40.5,57 L44,45 L47.5,57 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M58,34 L70,34 C77,34 81,38 81,44 C81,48 79,51 76,52.5 C80,54 83,57.5 83,62.5 C83,69.5 78,74 70.5,74 L58,74 Z M65,40.5 L65,50 L69.5,50 C72.3,50 74,48.3 74,45.2 C74,42.2 72.3,40.5 69.5,40.5 Z M65,56 L65,67.5 L70,67.5 C73.6,67.5 75.6,65.5 75.6,61.8 C75.6,58 73.6,56 70,56 Z" />
+</vector>

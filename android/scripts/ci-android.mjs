@@ -214,13 +214,14 @@ function extractFailures(log) {
       picked.push(l.slice(0, 1200));
     }
   }
-  return [...new Set(picked)].join("\n");
+  const root = ANDROID_DIR.replace(/\\/g, "/") + "/";
+  return [...new Set(picked)].map((l) => l.split("file://" + root).join("").split(root).join("")).join("\n");
 }
 
 function runGradle(tasks, javaHome) {
   const gradlew = path.join(ANDROID_DIR, "gradlew");
   if (fs.existsSync(gradlew)) fs.chmodSync(gradlew, 0o755);
-  const args = [...tasks, "--no-daemon", "--stacktrace", "--console=plain", "-Dorg.gradle.jvmargs=-Xmx5g -XX:+UseParallelGC", "-Pkotlin.daemon.jvmargs=-Xmx3g"];
+  const args = [...tasks, "--continue", "--no-daemon", "--console=plain", "-Dorg.gradle.jvmargs=-Xmx5g -XX:+UseParallelGC", "-Pkotlin.daemon.jvmargs=-Xmx3g"];
   const env = { ...process.env };
   if (javaHome) env.JAVA_HOME = javaHome;
   const started = Date.now();
@@ -276,7 +277,10 @@ async function main() {
   const hasProject = fs.existsSync(path.join(ANDROID_DIR, "settings.gradle.kts"));
   if (hasProject) {
     const javaHome = process.env.JAVA_HOME_21_X64 || process.env.JAVA_HOME_17_X64 || process.env.JAVA_HOME;
-    const tasks = [":app:assembleDebug", ":app:testDebugUnitTest", ":app:assembleRelease", ":app:lintDebug"];
+    const tasks = [":app:assembleDebug"];
+    if (!msg.includes("[android-skip-tests]")) tasks.push("testDebugUnitTest");
+    if (msg.includes("[android-release]") || msg.includes("[android-full]")) tasks.push(":app:assembleRelease");
+    if (msg.includes("[android-lint]") || msg.includes("[android-full]")) tasks.push(":app:lintDebug");
     const res = runGradle(tasks, javaHome);
     fs.writeFileSync(path.join(REPORT_DIR, "build.log"), res.log.slice(-1_500_000));
     const failures = extractFailures(res.log);

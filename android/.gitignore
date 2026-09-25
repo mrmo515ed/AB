@@ -1,0 +1,18 @@
+# Gradle / Android Studio
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing secrets (never commit release keys)
+*.jks
+!app/debug.keystore
+release-signing.properties
+keystore.properties
+
+# Firebase: a real google-services.json may be committed by the project owner if desired.
