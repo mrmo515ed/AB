@@ -41,7 +41,7 @@
     <string name="profile_save">Save</string>
     <string name="profile_saved">Profile updated</string>
     <string name="profile_username_taken">This username is taken</string>
-    <string name="profile_username_invalid">3–20 letters, numbers, dots or underscores</string>
+    <string name="profile_username_invalid">3–24 lowercase letters, numbers, dots or underscores</string>
     <string name="profile_username_ok">Username available</string>
     <string name="profile_checking">Checking…</string>
     <string name="profile_media_uploading">Your new photo is uploading…</string>

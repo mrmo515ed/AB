@@ -111,6 +111,17 @@ service cloud.firestore {
     //  - حد معروف: Firestore لا يدعم حجب حقل واحد عن القراءة داخل مستند
     //    عام — الحقول الحساسة يجب ألا تُخزَّن هنا أصلاً (راجع تقرير PR2)
     // ============================================================
+    // Starting balances a client may write when creating its own profile. Every web/Android
+    // sign-up path stays within these values; anything above must come from Cloud Functions.
+    function hasStarterEconomy() {
+      return incoming().get('coins', 0) <= 300
+        && incoming().get('stars', 0) <= 15
+        && incoming().get('reputation', 0) <= 30
+        && incoming().get('level', 1) <= 1
+        && incoming().get('xp', 0) <= 0
+        && incoming().get('gems', 0) <= 0;
+    }
+
     match /users/{userId} {
       allow read: if true;
 
@@ -118,7 +129,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) && (
         isAdminEmail() ||
         isAdmin() ||
-        !isPrivilegedRole(incoming().get('role', 'Member'))
+        (!isPrivilegedRole(incoming().get('role', 'Member')) && hasStarterEconomy())
       );
 
       // تحديث الملف:
@@ -172,7 +183,7 @@ service cloud.firestore {
         isAdmin() ||
         isMod() ||
         (existing().authorId == request.auth.uid && incoming().authorId == existing().authorId) ||
-        incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'likesCount', 'views', 'shares', 'comments', 'commentsCount', 'reactions', 'savedBy', 'likedUsers', 'lastReaction', 'poll', 'updatedAt'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'likesCount', 'views', 'shares', 'comments', 'commentsCount', 'reactions', 'reacts', 'reposts', 'repostsCount', 'savedBy', 'likedUsers', 'lastReaction', 'poll', 'updatedAt'])
       );
 
       allow delete: if isSignedIn() && (
@@ -190,7 +201,11 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if true;
       allow create: if isSignedIn() && (incoming().userId == request.auth.uid || incoming().authorId == request.auth.uid);
-      allow update: if isSignedIn() && (existing().userId == request.auth.uid || existing().authorId == request.auth.uid || isAdmin() || isMod());
+      allow update: if isSignedIn() && (
+        existing().userId == request.auth.uid || existing().authorId == request.auth.uid || isAdmin() || isMod() ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['views', 'reactions', 'updatedAt'])
+          && incoming().get('views', []).size() >= existing().get('views', []).size())
+      );
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid || existing().authorId == request.auth.uid || isAdmin() || isMod());
     }
 

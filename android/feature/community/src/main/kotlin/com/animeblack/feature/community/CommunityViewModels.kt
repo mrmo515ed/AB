@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.animeblack.core.common.result.AppResult
+import com.animeblack.core.data.push.ActiveScreenTracker
 import com.animeblack.core.data.repository.CommunityDraft
 import com.animeblack.core.data.repository.CommunityRepository
 import com.animeblack.core.data.repository.GroupDraft
@@ -152,6 +153,7 @@ class RoomViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: CommunityRepository,
     users: UserRepository,
+    private val tracker: ActiveScreenTracker,
 ) : ViewModel() {
     /** Type-safe routes store their properties by name, which identifies the room kind. */
     val room: RoomRef = when {
@@ -275,6 +277,25 @@ class RoomViewModel @Inject constructor(
             is AppResult.Failure -> _messages.tryEmit(r.error.messageRes())
             else -> onLeft()
         }
+    }
+
+    /** Key matched against FCM tags (`group:<id>`) to avoid notifying for the room on screen. */
+    private val trackerKey: String = when (val r = room) {
+        is RoomRef.ChannelRoom -> r.communityId
+        else -> r.id
+    }
+
+    fun setActive(active: Boolean) {
+        if (active) {
+            tracker.activeConversationKey = trackerKey
+        } else if (tracker.activeConversationKey == trackerKey) {
+            tracker.activeConversationKey = null
+        }
+    }
+
+    override fun onCleared() {
+        setActive(false)
+        super.onCleared()
     }
 
     /** Destination of the header's info action. */

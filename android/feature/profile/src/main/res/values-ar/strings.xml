@@ -41,7 +41,7 @@
     <string name="profile_save">حفظ</string>
     <string name="profile_saved">تم تحديث الملف</string>
     <string name="profile_username_taken">اسم المستخدم هذا محجوز</string>
-    <string name="profile_username_invalid">من 3 إلى 20 حرفاً أو رقماً أو نقطة أو شرطة سفلية</string>
+    <string name="profile_username_invalid">من 3 إلى 24 حرفاً إنجليزياً صغيراً أو رقماً أو نقطة أو شرطة سفلية</string>
     <string name="profile_username_ok">اسم المستخدم متاح</string>
     <string name="profile_checking">جارٍ التحقق…</string>
     <string name="profile_media_uploading">جارٍ رفع صورتك الجديدة…</string>

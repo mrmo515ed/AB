@@ -209,7 +209,7 @@ class EditProfileViewModel @Inject constructor(
     fun update(transform: (EditProfileUiState) -> EditProfileUiState) = _state.update(transform)
 
     fun onUsername(value: String) {
-        val cleaned = value.take(20)
+        val cleaned = value.take(24)
         _state.update { it.copy(username = cleaned, usernameCheck = if (cleaned.isBlank()) UsernameCheck.Idle else UsernameCheck.Checking) }
         usernameInput.value = cleaned
     }
