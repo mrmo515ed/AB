@@ -77,6 +77,7 @@ import com.animeblack.core.ui.VideoPlayer
 import com.animeblack.core.ui.reactionStyle
 import com.animeblack.core.ui.relativeTime
 import kotlinx.coroutines.launch
+import com.animeblack.core.ui.localMediaFor
 
 private const val ITEM_DURATION_MS = 5_000L
 private const val VIDEO_DURATION_MS = 15_000L

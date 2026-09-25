@@ -75,6 +75,8 @@ import com.animeblack.core.ui.PostActions
 import com.animeblack.core.ui.PostCard
 import com.animeblack.core.ui.shareLink
 import com.animeblack.core.ui.shareText
+import com.animeblack.core.ui.copyToClipboard
+import com.animeblack.core.ui.localMediaFor
 
 @Composable
 fun PostDetailScreen(navigator: HomeNavigator, onBack: () -> Unit, viewModel: PostDetailViewModel = hiltViewModel()) {
@@ -339,15 +341,3 @@ internal fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> U
     }
 }
 
-/** Builds a [LocalMedia] from a picker Uri (type from MIME; size read lazily by the preparer). */
-fun localMediaFor(context: android.content.Context, uri: Uri): LocalMedia {
-    val mime = context.contentResolver.getType(uri).orEmpty()
-    val type = when {
-        mime == "image/gif" -> "gif"
-        mime.startsWith("video") -> "video"
-        mime.startsWith("audio") -> "audio"
-        mime.startsWith("image") -> "image"
-        else -> "file"
-    }
-    return LocalMedia(uri = uri.toString(), type = type, mimeType = mime)
-}

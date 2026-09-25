@@ -35,6 +35,7 @@ import com.animeblack.core.model.Thought
 import com.animeblack.core.model.User
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.AggregateSource
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
@@ -64,7 +65,8 @@ class FirestoreGameRepository @Inject constructor(
 
     override fun observeProfile(): Flow<GameProfile?> {
         val uid = auth.currentUser?.uid ?: return flowOf(null)
-        return profiles.document(uid).asFlow().map { snap -> snap.data?.toGameProfile(uid) ?: GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis()) }
+        return profiles.document(uid).asFlow()
+            .map<DocumentSnapshot, GameProfile?> { snap -> snap.data?.toGameProfile(uid) ?: GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis()) }
             .catch { emit(null) }
     }
 

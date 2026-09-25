@@ -1,7 +1,5 @@
 package com.animeblack.feature.home
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,6 +73,7 @@ import com.animeblack.core.ui.messageRes
 import com.animeblack.core.ui.shareLink
 import com.animeblack.core.ui.shareText
 import kotlinx.coroutines.launch
+import com.animeblack.core.ui.copyToClipboard
 
 /** Navigation callbacks the home feature needs from the app host. */
 data class HomeNavigator(
@@ -247,10 +246,6 @@ fun HomeScreen(navigator: HomeNavigator, viewModel: HomeViewModel = hiltViewMode
     }
 }
 
-internal fun copyToClipboard(context: Context, text: String) {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-    cm.setPrimaryClip(ClipData.newPlainText("Anime Black", text))
-}
 
 @Composable
 internal fun PostMenu(
