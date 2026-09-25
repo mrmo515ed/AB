@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="auth_welcome">Welcome to Anime Black</string>
+    <string name="auth_tagline">The home of the Arab anime community</string>
+    <string name="auth_email">E-mail</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_name">Display name</string>
+    <string name="auth_sign_in">Sign in</string>
+    <string name="auth_sign_up">Create account</string>
+    <string name="auth_google">Continue with Google</string>
+    <string name="auth_or">or</string>
+    <string name="auth_forgot">Forgot password?</string>
+    <string name="auth_no_account">New here? Create an account</string>
+    <string name="auth_have_account">Already have an account? Sign in</string>
+    <string name="auth_reset_title">Reset password</string>
+    <string name="auth_reset_hint">Enter your e-mail and we will send you a reset link.</string>
+    <string name="auth_reset_send">Send reset link</string>
+    <string name="auth_reset_sent">If an account exists for this e-mail, a reset link was sent.</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
+    <string name="auth_saved_accounts">Saved accounts</string>
+    <string name="auth_switch_account">Switch account</string>
+    <string name="auth_add_account">Add another account</string>
+    <string name="auth_remove_account">Remove</string>
+    <string name="auth_complete_title">Complete your profile</string>
+    <string name="auth_complete_hint">Choose how the community will see you.</string>
+    <string name="auth_username">Username</string>
+    <string name="auth_bio">Bio</string>
+    <string name="auth_pick_avatar">Choose avatar</string>
+    <string name="auth_continue">Continue</string>
+    <string name="auth_username_available">Username is available</string>
+    <string name="auth_username_taken">Username is already taken</string>
+    <string name="auth_username_invalid">3–24 characters: lowercase letters, numbers, _ and .</string>
+    <string name="auth_err_email">Enter a valid e-mail address</string>
+    <string name="auth_err_password">Password must be at least 6 characters</string>
+    <string name="auth_err_name">Enter your name</string>
+    <string name="auth_err_invalid_credential">Incorrect e-mail or password</string>
+    <string name="auth_err_user_not_found">No account found for this e-mail</string>
+    <string name="auth_err_email_in_use">This e-mail is already registered</string>
+    <string name="auth_err_weak_password">Choose a stronger password</string>
+    <string name="auth_err_network">No connection. Check your internet and try again.</string>
+    <string name="auth_err_too_many">Too many attempts. Please wait and try again.</string>
+    <string name="auth_err_google_config">Google sign-in is not configured for this build (register the app SHA-1 in Firebase).</string>
+    <string name="auth_err_google_no_account">No Google account found on this device</string>
+    <string name="auth_err_generic">Sign-in failed. Please try again.</string>
+    <string name="auth_terms_notice">By continuing you agree to the Terms and the Privacy Policy.</string>
+</resources>

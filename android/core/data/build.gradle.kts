@@ -14,8 +14,8 @@ android {
 dependencies {
     api(project(":core:model"))
     api(project(":core:common"))
-    implementation(project(":core:datastore"))
-    implementation(project(":core:database"))
+    api(project(":core:datastore"))
+    api(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.process)
