@@ -47,7 +47,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object CreateReelRoute
 
 // ------------------------------------------------------------------ Profile
-@Serializable data class ProfileRoute(val userId: String? = null)
+@Serializable data class ProfileRoute(val userId: String? = null, val username: String? = null)
 @Serializable data object EditProfileRoute
 @Serializable data class FollowListRoute(val userId: String, val followers: Boolean)
 @Serializable data object QrCardRoute

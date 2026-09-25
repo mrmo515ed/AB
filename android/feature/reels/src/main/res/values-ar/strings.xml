@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_title">الريلز</string>
+    <string name="reels_create">ريل جديد</string>
+    <string name="reels_empty">لا توجد ريلز بعد</string>
+    <string name="reels_empty_hint">كن أول من يشارك فيديو قصيراً.</string>
+    <string name="reels_like">إعجاب</string>
+    <string name="reels_comments">التعليقات</string>
+    <string name="reels_share">مشاركة</string>
+    <string name="reels_more">المزيد</string>
+    <string name="reels_delete">حذف الريل</string>
+    <string name="reels_delete_confirm">حذف هذا الريل نهائياً؟</string>
+    <string name="reels_report">الإبلاغ عن الريل</string>
+    <string name="reels_comment_hint">أضف تعليقاً…</string>
+    <string name="reels_no_comments">لا توجد تعليقات بعد. ابدأ النقاش.</string>
+    <string name="reels_views">%1$s مشاهدة</string>
+    <string name="reels_original_audio">الصوت الأصلي</string>
+    <string name="reels_pick_video">اختر فيديو</string>
+    <string name="reels_record">تسجيل</string>
+    <string name="reels_caption">الوصف</string>
+    <string name="reels_music">الموسيقى / الصوت</string>
+    <string name="reels_publish">نشر</string>
+    <string name="reels_publishing">جارٍ رفع الريل، وسيظهر بعد اكتمال المعالجة.</string>
+    <string name="reels_video_required">اختر فيديو أو سجّل واحداً أولاً.</string>
+    <string name="reels_change_video">تغيير الفيديو</string>
+    <string name="reels_deleted">تم حذف الريل</string>
+    <string name="reels_paused">متوقف مؤقتاً</string>
+    <string name="reels_not_found">هذا الريل لم يعد متاحاً.</string>
+</resources>

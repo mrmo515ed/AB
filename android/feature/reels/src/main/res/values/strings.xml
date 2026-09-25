@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_title">Reels</string>
+    <string name="reels_create">New reel</string>
+    <string name="reels_empty">No reels yet</string>
+    <string name="reels_empty_hint">Be the first to share a short video.</string>
+    <string name="reels_like">Like</string>
+    <string name="reels_comments">Comments</string>
+    <string name="reels_share">Share</string>
+    <string name="reels_more">More</string>
+    <string name="reels_delete">Delete reel</string>
+    <string name="reels_delete_confirm">Delete this reel permanently?</string>
+    <string name="reels_report">Report reel</string>
+    <string name="reels_comment_hint">Add a comment…</string>
+    <string name="reels_no_comments">No comments yet. Start the conversation.</string>
+    <string name="reels_views">%1$s views</string>
+    <string name="reels_original_audio">Original audio</string>
+    <string name="reels_pick_video">Choose a video</string>
+    <string name="reels_record">Record</string>
+    <string name="reels_caption">Caption</string>
+    <string name="reels_music">Music / sound</string>
+    <string name="reels_publish">Publish</string>
+    <string name="reels_publishing">Your reel is uploading. It will appear once processed.</string>
+    <string name="reels_video_required">Pick or record a video first.</string>
+    <string name="reels_change_video">Change video</string>
+    <string name="reels_deleted">Reel deleted</string>
+    <string name="reels_paused">Paused</string>
+    <string name="reels_not_found">This reel is no longer available.</string>
+</resources>

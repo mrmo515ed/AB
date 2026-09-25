@@ -22,7 +22,7 @@
     <string name="chat_delete">Delete chat</string>
     <string name="chat_delete_confirm">Delete this conversation from your list? The other person keeps their copy.</string>
     <string name="chat_blocked">You blocked this user. Unblock to send messages.</string>
-    <string name="chat_closed">This user doesn't accept direct messages.</string>
+    <string name="chat_closed">This user doesn\'t accept direct messages.</string>
     <string name="chat_requires_request">This user accepts messages by request. Your first message will be sent as a request.</string>
     <string name="chat_request_sent">Message request sent</string>
     <string name="chat_accept">Accept</string>
@@ -35,7 +35,7 @@
     <string name="chat_view_profile">View profile</string>
     <string name="chat_block">Block</string>
     <string name="chat_unblock">Unblock</string>
-    <string name="chat_block_confirm">Block %1$s? They won't be able to message you.</string>
+    <string name="chat_block_confirm">Block %1$s? They won\'t be able to message you.</string>
     <string name="chat_wallpaper">Wallpaper</string>
     <string name="chat_wallpaper_default">Default</string>
     <string name="chat_shared_media">Shared media</string>
@@ -47,7 +47,7 @@
     <string name="chat_delete_msg_confirm">Delete this message for everyone?</string>
     <string name="chat_muted">Muted</string>
     <string name="chat_report_user">Report user</string>
-    <string name="chat_self">You can't message yourself.</string>
+    <string name="chat_self">You can\'t message yourself.</string>
     <string name="chat_loading_older">Loading older messages…</string>
     <string name="chat_unblocked">User unblocked</string>
     <string name="chat_blocked_done">User blocked</string>
