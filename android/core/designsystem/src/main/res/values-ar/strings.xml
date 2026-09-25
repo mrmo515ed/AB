@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ab_retry">إعادة المحاولة</string>
+    <string name="ab_back">رجوع</string>
+    <string name="ab_cancel">إلغاء</string>
+    <string name="ab_confirm">تأكيد</string>
+    <string name="ab_loading">جارٍ التحميل…</string>
+    <string name="ab_offline_banner">أنت غير متصل — ستتم مزامنة تغييراتك تلقائياً عند عودة الاتصال.</string>
+    <string name="ab_verified">حساب موثّق</string>
+    <string name="ab_something_went_wrong">حدث خطأ غير متوقع</string>
+    <string name="ab_clear">مسح</string>
+    <string name="ab_search">بحث</string>
+</resources>

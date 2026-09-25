@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ab_retry">Retry</string>
+    <string name="ab_back">Back</string>
+    <string name="ab_cancel">Cancel</string>
+    <string name="ab_confirm">Confirm</string>
+    <string name="ab_loading">Loading…</string>
+    <string name="ab_offline_banner">You are offline — changes will sync automatically when you reconnect.</string>
+    <string name="ab_verified">Verified account</string>
+    <string name="ab_something_went_wrong">Something went wrong</string>
+    <string name="ab_clear">Clear</string>
+    <string name="ab_search">Search</string>
+</resources>
