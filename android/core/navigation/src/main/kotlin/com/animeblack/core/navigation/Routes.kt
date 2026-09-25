@@ -19,7 +19,8 @@ import kotlinx.serialization.Serializable
 
 // ------------------------------------------------------------------ Home / posts / stories
 @Serializable data class PostDetailRoute(val postId: String, val focusComment: Boolean = false)
-@Serializable data class CreatePostRoute(val editPostId: String? = null, val quotePostId: String? = null)
+/** [sharedText] pre-fills the composer when text is shared into the app (ACTION_SEND). */
+@Serializable data class CreatePostRoute(val editPostId: String? = null, val quotePostId: String? = null, val sharedText: String? = null)
 @Serializable data class StoryViewerRoute(val userId: String)
 @Serializable data object CreateStoryRoute
 @Serializable data object MyStoriesRoute

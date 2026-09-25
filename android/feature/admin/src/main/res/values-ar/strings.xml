@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="admin_title">لوحة الإدارة</string>
+    <string name="admin_denied">لا تملك صلاحية الوصول إلى أدوات الإدارة.</string>
+    <string name="admin_users">المستخدمون</string>
+    <string name="admin_posts">المنشورات</string>
+    <string name="admin_reports">البلاغات</string>
+    <string name="admin_groups">المجموعات</string>
+    <string name="admin_pending">بلاغات معلّقة</string>
+    <string name="admin_manage_reports">قائمة الإشراف</string>
+    <string name="admin_manage_users">المستخدمون والأدوار</string>
+    <string name="admin_broadcast">بث إعلان</string>
+    <string name="admin_audit">سجل التدقيق</string>
+    <string name="admin_resolve">حل</string>
+    <string name="admin_dismiss">تجاهل</string>
+    <string name="admin_remove_content">حذف المحتوى</string>
+    <string name="admin_no_reports">القائمة فارغة</string>
+    <string name="admin_reported_by">أبلغ عنه %1$s</string>
+    <string name="admin_role">الدور</string>
+    <string name="admin_verify">توثيق</string>
+    <string name="admin_unverify">إزالة التوثيق</string>
+    <string name="admin_title_hint">العنوان</string>
+    <string name="admin_message_hint">الرسالة</string>
+    <string name="admin_type">النوع</string>
+    <string name="admin_send">إرسال الإعلان</string>
+    <string name="admin_sent">تم إرسال الإعلان</string>
+    <string name="admin_done">تم</string>
+    <string name="admin_no_audit">لا توجد سجلات</string>
+    <string name="admin_type_announcement">إعلان</string>
+    <string name="admin_type_update">تحديث</string>
+    <string name="admin_type_alert">تنبيه</string>
+    <string name="admin_set_role">تعيين الدور</string>
+</resources>

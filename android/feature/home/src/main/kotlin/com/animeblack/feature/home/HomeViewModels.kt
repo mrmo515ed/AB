@@ -203,6 +203,8 @@ class CreatePostViewModel @Inject constructor(
                         it.copy(text = post.text, spoiler = post.spoiler, allowComments = post.allowComments, privacy = post.privacy, location = post.location, category = post.category)
                     }
                 }
+            } else if (!route.sharedText.isNullOrBlank()) {
+                _state.update { it.copy(text = route.sharedText.orEmpty().take(5_000)) }
             } else {
                 val draft = settings.postDraft.first()
                 if (draft.isNotBlank()) _state.update { it.copy(text = draft) }

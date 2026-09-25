@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="games_title">ساحة الصيادين</string>
+    <string name="games_play">العب (%1$d طاقة)</string>
+    <string name="games_energy">الطاقة %1$d/%2$d</string>
+    <string name="games_level">مستوى الصياد %1$d</string>
+    <string name="games_gold">الذهب</string>
+    <string name="games_gems">الجواهر</string>
+    <string name="games_high_score">أعلى نتيجة</string>
+    <string name="games_best_distance">أبعد مسافة</string>
+    <string name="games_kills">القتلى</string>
+    <string name="games_matches">المباريات</string>
+    <string name="games_daily">الإمداد اليومي</string>
+    <string name="games_claim">استلام</string>
+    <string name="games_claimed">+%1$d ذهب وتمت إعادة ملء الطاقة</string>
+    <string name="games_characters">الشخصيات</string>
+    <string name="games_leaderboard">المتصدرون</string>
+    <string name="games_equipped">مُجهّز</string>
+    <string name="games_equip">تجهيز</string>
+    <string name="games_unlock_coins">فتح · %1$d ذهب</string>
+    <string name="games_unlock_gems">فتح · %1$d جوهرة</string>
+    <string name="games_upgrade">ترقية · %1$d ذهب</string>
+    <string name="games_level_short">م %1$d</string>
+    <string name="games_tap_jump">اضغط للقفز (اضغط مرة أخرى في الهواء لقفزة مزدوجة)</string>
+    <string name="games_attack">ضربة</string>
+    <string name="games_score">النتيجة %1$d</string>
+    <string name="games_distance">%1$d م</string>
+    <string name="games_game_over">انتهت الجولة</string>
+    <string name="games_submit">حفظ النتيجة</string>
+    <string name="games_again">العب مجدداً</string>
+    <string name="games_exit">خروج</string>
+    <string name="games_result">النتيجة %1$d · %2$d م · %3$d قتيل · %4$d عملة</string>
+    <string name="games_saved">تم حفظ النتيجة: المستوى %1$d، %2$d ذهب</string>
+    <string name="games_no_energy">لا توجد طاقة كافية. تتجدد نقطة كل 8 دقائق.</string>
+    <string name="games_rank">#%1$d</string>
+    <string name="games_empty_board">لا توجد نتائج بعد</string>
+    <string name="games_paused">متوقف</string>
+    <string name="games_resume">متابعة</string>
+</resources>

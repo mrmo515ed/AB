@@ -5,3 +5,7 @@ plugins {
 android {
     namespace = "com.animeblack.feature.settings"
 }
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+}

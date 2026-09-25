@@ -147,8 +147,6 @@ dependencies {
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.compose.material3.navigationSuite)
-    implementation(libs.androidx.compose.material3.adaptive)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

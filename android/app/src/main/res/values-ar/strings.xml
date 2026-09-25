@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_community">المجتمع</string>
+    <string name="nav_chat">الدردشة</string>
+    <string name="nav_reels">الريلز</string>
+    <string name="nav_more">المزيد</string>
+    <string name="app_maintenance_title">التطبيق تحت الصيانة</string>
+    <string name="app_maintenance_default">يجري تحديث Anime Black حالياً. يرجى العودة قريباً.</string>
+    <string name="app_update_title">التحديث مطلوب</string>
+    <string name="app_update_body">هذا الإصدار من Anime Black لم يعد مدعوماً. يرجى التحديث للمتابعة.</string>
+    <string name="app_update_action">تحديث</string>
+    <string name="app_profile_error">تعذر تحميل ملفك الشخصي.</string>
+    <string name="app_retry">إعادة المحاولة</string>
+    <string name="app_sign_out">تسجيل الخروج</string>
+    <string name="app_dismiss">إغلاق</string>
+</resources>

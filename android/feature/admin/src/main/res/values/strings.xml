@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="admin_title">Admin</string>
+    <string name="admin_denied">You don\'t have access to the admin tools.</string>
+    <string name="admin_users">Users</string>
+    <string name="admin_posts">Posts</string>
+    <string name="admin_reports">Reports</string>
+    <string name="admin_groups">Groups</string>
+    <string name="admin_pending">Pending reports</string>
+    <string name="admin_manage_reports">Moderation queue</string>
+    <string name="admin_manage_users">Users &amp; roles</string>
+    <string name="admin_broadcast">Broadcast</string>
+    <string name="admin_audit">Audit log</string>
+    <string name="admin_resolve">Resolve</string>
+    <string name="admin_dismiss">Dismiss</string>
+    <string name="admin_remove_content">Remove content</string>
+    <string name="admin_no_reports">The queue is empty</string>
+    <string name="admin_reported_by">Reported by %1$s</string>
+    <string name="admin_role">Role</string>
+    <string name="admin_verify">Verify</string>
+    <string name="admin_unverify">Remove verification</string>
+    <string name="admin_title_hint">Title</string>
+    <string name="admin_message_hint">Message</string>
+    <string name="admin_type">Type</string>
+    <string name="admin_send">Send broadcast</string>
+    <string name="admin_sent">Broadcast sent</string>
+    <string name="admin_done">Done</string>
+    <string name="admin_no_audit">No audit entries</string>
+    <string name="admin_type_announcement">Announcement</string>
+    <string name="admin_type_update">Update</string>
+    <string name="admin_type_alert">Alert</string>
+    <string name="admin_set_role">Set role</string>
+</resources>

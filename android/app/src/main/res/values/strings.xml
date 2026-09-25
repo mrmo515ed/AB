@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Anime Black</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_community">Community</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_reels">Reels</string>
+    <string name="nav_more">More</string>
+    <string name="app_maintenance_title">Down for maintenance</string>
+    <string name="app_maintenance_default">Anime Black is being upgraded. Please check back soon.</string>
+    <string name="app_update_title">Update required</string>
+    <string name="app_update_body">This version of Anime Black is no longer supported. Please update to continue.</string>
+    <string name="app_update_action">Update</string>
+    <string name="app_profile_error">We couldn’t load your profile.</string>
+    <string name="app_retry">Retry</string>
+    <string name="app_sign_out">Sign out</string>
+    <string name="app_dismiss">Dismiss</string>
 </resources>

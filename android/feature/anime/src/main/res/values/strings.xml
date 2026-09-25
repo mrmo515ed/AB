@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="anime_title">Anime</string>
+    <string name="anime_trending">Trending now</string>
+    <string name="anime_seasonal">This season</string>
+    <string name="anime_search">Search anime &amp; manga</string>
+    <string name="anime_manga">Manga</string>
+    <string name="anime_episodes">%1$d episodes</string>
+    <string name="anime_chapters">%1$d chapters</string>
+    <string name="anime_score">Score %1$s</string>
+    <string name="anime_characters">Characters</string>
+    <string name="anime_synopsis">Synopsis</string>
+    <string name="anime_studios">Studios</string>
+    <string name="anime_next_episode">Episode %1$d airs %2$s</string>
+    <string name="anime_favorite">Add to favourites</string>
+    <string name="anime_unfavorite">Remove from favourites</string>
+    <string name="anime_open_site">Open on the web</string>
+    <string name="anime_share">Share</string>
+    <string name="anime_error">Couldn\'t load anime right now</string>
+    <string name="anime_no_results">No titles found</string>
+    <string name="agent_title">AI search agent</string>
+    <string name="agent_hint">Ask about anime news, releases or rumours…</string>
+    <string name="agent_mode_general">General</string>
+    <string name="agent_mode_factcheck">Fact-check</string>
+    <string name="agent_mode_schedule">Release schedule</string>
+    <string name="agent_sources">Sources</string>
+    <string name="agent_not_configured">The AI agent needs the Anime Black server URL (API_BASE_URL) configured for this build.</string>
+    <string name="agent_thinking">Thinking…</string>
+    <string name="agent_intro">Ask me anything about anime: news, release dates, or whether a rumour is true.</string>
+    <string name="agent_clear">New conversation</string>
+</resources>

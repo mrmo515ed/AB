@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="anime_title">الأنمي</string>
+    <string name="anime_trending">الرائج الآن</string>
+    <string name="anime_seasonal">هذا الموسم</string>
+    <string name="anime_search">ابحث عن أنمي أو مانجا</string>
+    <string name="anime_manga">مانجا</string>
+    <string name="anime_episodes">%1$d حلقة</string>
+    <string name="anime_chapters">%1$d فصل</string>
+    <string name="anime_score">التقييم %1$s</string>
+    <string name="anime_characters">الشخصيات</string>
+    <string name="anime_synopsis">القصة</string>
+    <string name="anime_studios">الاستوديوهات</string>
+    <string name="anime_next_episode">الحلقة %1$d تُعرض %2$s</string>
+    <string name="anime_favorite">إضافة إلى المفضلة</string>
+    <string name="anime_unfavorite">إزالة من المفضلة</string>
+    <string name="anime_open_site">فتح على الويب</string>
+    <string name="anime_share">مشاركة</string>
+    <string name="anime_error">تعذر تحميل الأنمي حالياً</string>
+    <string name="anime_no_results">لم يتم العثور على عناوين</string>
+    <string name="agent_title">وكيل البحث الذكي</string>
+    <string name="agent_hint">اسأل عن أخبار الأنمي أو مواعيد العرض أو الشائعات…</string>
+    <string name="agent_mode_general">عام</string>
+    <string name="agent_mode_factcheck">تحقق من خبر</string>
+    <string name="agent_mode_schedule">مواعيد العرض</string>
+    <string name="agent_sources">المصادر</string>
+    <string name="agent_not_configured">يحتاج الوكيل الذكي إلى ضبط عنوان خادم Anime Black ‏(API_BASE_URL) في هذا الإصدار.</string>
+    <string name="agent_thinking">جارٍ التفكير…</string>
+    <string name="agent_intro">اسألني أي شيء عن الأنمي: الأخبار ومواعيد العرض أو صحة الشائعات.</string>
+    <string name="agent_clear">محادثة جديدة</string>
+</resources>

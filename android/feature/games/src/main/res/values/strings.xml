@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="games_title">Hunter Arena</string>
+    <string name="games_play">Play (%1$d energy)</string>
+    <string name="games_energy">Energy %1$d/%2$d</string>
+    <string name="games_level">Hunter level %1$d</string>
+    <string name="games_gold">Gold</string>
+    <string name="games_gems">Gems</string>
+    <string name="games_high_score">High score</string>
+    <string name="games_best_distance">Best distance</string>
+    <string name="games_kills">Kills</string>
+    <string name="games_matches">Matches</string>
+    <string name="games_daily">Daily supply</string>
+    <string name="games_claim">Claim</string>
+    <string name="games_claimed">+%1$d gold, energy refilled</string>
+    <string name="games_characters">Characters</string>
+    <string name="games_leaderboard">Leaderboard</string>
+    <string name="games_equipped">Equipped</string>
+    <string name="games_equip">Equip</string>
+    <string name="games_unlock_coins">Unlock · %1$d gold</string>
+    <string name="games_unlock_gems">Unlock · %1$d gems</string>
+    <string name="games_upgrade">Upgrade · %1$d gold</string>
+    <string name="games_level_short">Lv %1$d</string>
+    <string name="games_tap_jump">Tap to jump (double tap in the air for a double jump)</string>
+    <string name="games_attack">Strike</string>
+    <string name="games_score">Score %1$d</string>
+    <string name="games_distance">%1$d m</string>
+    <string name="games_game_over">Run over</string>
+    <string name="games_submit">Save result</string>
+    <string name="games_again">Play again</string>
+    <string name="games_exit">Exit</string>
+    <string name="games_result">Score %1$d · %2$d m · %3$d kills · %4$d coins</string>
+    <string name="games_saved">Result saved: level %1$d, %2$d gold</string>
+    <string name="games_no_energy">Not enough energy. It refills 1 point every 8 minutes.</string>
+    <string name="games_rank">#%1$d</string>
+    <string name="games_empty_board">No scores yet</string>
+    <string name="games_paused">Paused</string>
+    <string name="games_resume">Resume</string>
+</resources>

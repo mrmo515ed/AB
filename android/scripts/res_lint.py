@@ -49,8 +49,11 @@ def check(root, fix):
         ar = base.parent.parent / "values-ar" / "strings.xml"
         if not ar.exists():
             continue
-        k1 = {e.get("name") for e in ET.parse(base).getroot().iter("string")}
-        k2 = {e.get("name") for e in ET.parse(ar).getroot().iter("string")}
+        try:
+            k1 = {e.get("name") for e in ET.parse(base).getroot().iter("string") if e.get("translatable") != "false"}
+            k2 = {e.get("name") for e in ET.parse(ar).getroot().iter("string")}
+        except ET.ParseError:
+            continue  # already reported above
         for k in sorted(k1 - k2):
             problems.append(f"{ar}: missing {k}")
         for k in sorted(k2 - k1):
