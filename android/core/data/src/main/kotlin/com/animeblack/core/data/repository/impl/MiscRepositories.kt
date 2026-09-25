@@ -144,13 +144,18 @@ class FirestoreGameRepository @Inject constructor(
         updated
     }
 
-    override suspend fun unlockCharacter(characterId: String, cost: Long): AppResult<Unit> = runCatchingApp(errorMapper) {
+    override suspend fun unlockCharacter(characterId: String, cost: Long, currency: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         val uid = auth.requireUid()
         val p = current(uid)
         if (p.characters.any { it.id == characterId && it.unlocked }) return@runCatchingApp
-        if (p.gold < cost) throw AppErrorException(AppError.Validation("gold", "insufficient"))
         val chars = p.characters.filterNot { it.id == characterId } + GameCharacterState(characterId, 1, 1, 0, true)
-        write(p.copy(gold = p.gold - cost), chars)
+        if (currency == "gems") {
+            if (p.gems < cost) throw AppErrorException(AppError.Validation("gems", "insufficient"))
+            write(p.copy(gems = p.gems - cost), chars)
+        } else {
+            if (p.gold < cost) throw AppErrorException(AppError.Validation("gold", "insufficient"))
+            write(p.copy(gold = p.gold - cost), chars)
+        }
     }
 
     override suspend fun upgradeCharacter(characterId: String, cost: Long): AppResult<Unit> = runCatchingApp(errorMapper) {

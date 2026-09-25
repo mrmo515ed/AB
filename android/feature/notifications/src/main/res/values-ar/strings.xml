@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notif_title">الإشعارات</string>
+    <string name="notif_mark_all">تعليم الكل كمقروء</string>
+    <string name="notif_empty">لا جديد حالياً</string>
+    <string name="notif_empty_hint">ستظهر هنا الإعجابات والتعليقات والمتابعات والإشارات.</string>
+    <string name="notif_today">اليوم</string>
+    <string name="notif_earlier">سابقاً</string>
+    <string name="notif_delete">حذف</string>
+    <string name="notif_announcement">إعلان</string>
+    <string name="notif_unread">%1$d غير مقروء</string>
+</resources>

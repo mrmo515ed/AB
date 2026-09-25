@@ -4,6 +4,19 @@ multiple substitutions, and en/ar key parity. `--fix` escapes bare apostrophes."
 import re, sys, pathlib
 import xml.etree.ElementTree as ET
 
+def bare_apostrophe(value):
+    """True when an apostrophe is preceded by an even number of backslashes (i.e. unescaped)."""
+    for i, ch in enumerate(value):
+        if ch == "'":
+            n, j = 0, i - 1
+            while j >= 0 and value[j] == "\\":
+                n += 1
+                j -= 1
+            if n % 2 == 0:
+                return True
+    return False
+
+
 def check(root, fix):
     problems = []
     for f in sorted(root.rglob("src/main/res/values*/strings.xml")):
@@ -18,7 +31,7 @@ def check(root, fix):
         new = text
         for el in tree.iter("string"):
             name, value = el.get("name"), (el.text or "")
-            if re.search(r"(?<!\\)'", value):
+            if re.search(r"(?<!\\)(?:\\\\)*'", value) and bare_apostrophe(value):
                 if fix:
                     esc = re.sub(r"(?<!\\)'", r"\\'", value)
                     new = new.replace(f'name="{name}">{value}<', f'name="{name}">{esc}<')

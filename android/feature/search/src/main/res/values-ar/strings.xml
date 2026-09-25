@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_title">البحث</string>
+    <string name="search_hint">ابحث عن أشخاص أو منشورات أو مجموعات أو أنمي</string>
+    <string name="search_people">أشخاص</string>
+    <string name="search_posts">منشورات</string>
+    <string name="search_groups">مجموعات</string>
+    <string name="search_anime">أنمي</string>
+    <string name="search_trending">الوسوم الرائجة</string>
+    <string name="search_suggested">أشخاص مقترحون</string>
+    <string name="search_no_results">لا توجد نتائج لـ «%1$s»</string>
+    <string name="search_min_chars">اكتب حرفين على الأقل</string>
+    <string name="search_members">%1$d عضو</string>
+    <string name="search_ask_agent">اسأل الوكيل الذكي</string>
+</resources>

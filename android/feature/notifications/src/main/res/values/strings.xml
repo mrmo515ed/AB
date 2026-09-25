@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notif_title">Notifications</string>
+    <string name="notif_mark_all">Mark all as read</string>
+    <string name="notif_empty">You\'re all caught up</string>
+    <string name="notif_empty_hint">Likes, comments, follows and mentions will show up here.</string>
+    <string name="notif_today">Today</string>
+    <string name="notif_earlier">Earlier</string>
+    <string name="notif_delete">Delete</string>
+    <string name="notif_announcement">Announcement</string>
+    <string name="notif_unread">%1$d unread</string>
+</resources>

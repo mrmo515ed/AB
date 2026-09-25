@@ -169,7 +169,7 @@ internal fun Map<String, Any?>.toGameProfile(uid: String): GameProfile {
         totalKills = p.long("totalKills"),
         gamesPlayed = maxOf(p.int("totalMatches"), p.int("gamesPlayed")),
         totalWins = p.int("totalWins"),
-        selectedCharacter = p.firstStr("equippedCharacterId", "selectedCharacter").ifBlank { "jinwoo" },
+        selectedCharacter = p.firstStr("equippedCharacterId", "selectedCharacter").ifBlank { "c_ren" },
         characters = mapList("characters").map {
             GameCharacterState(it.str("id"), it.int("level", 1), it.int("stars", 1), it.int("transformationTier"), it.bool("unlocked"))
         },

@@ -283,7 +283,8 @@ interface GameRepository {
     fun observeProfile(): Flow<GameProfile?>
     suspend fun startRun(): AppResult<GameProfile>
     suspend fun submitRun(result: GameRunResult): AppResult<GameProfile>
-    suspend fun unlockCharacter(characterId: String, cost: Long): AppResult<Unit>
+    /** [currency] is `coins` (gold) or `gems`, matching the web character catalogue. */
+    suspend fun unlockCharacter(characterId: String, cost: Long, currency: String = "coins"): AppResult<Unit>
     suspend fun upgradeCharacter(characterId: String, cost: Long): AppResult<Unit>
     suspend fun selectCharacter(characterId: String): AppResult<Unit>
     suspend fun claimDaily(): AppResult<Long>

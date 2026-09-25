@@ -89,7 +89,7 @@ data class GameProfile(
     val totalKills: Long = 0,
     val gamesPlayed: Int = 0,
     val totalWins: Int = 0,
-    val selectedCharacter: String = "jinwoo",
+    val selectedCharacter: String = "c_ren",
     val characters: List<GameCharacterState> = emptyList(),
     val dailyDay: Int = 0,
     val lastDailyAt: Long = 0,

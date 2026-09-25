@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search people, posts, groups, anime</string>
+    <string name="search_people">People</string>
+    <string name="search_posts">Posts</string>
+    <string name="search_groups">Groups</string>
+    <string name="search_anime">Anime</string>
+    <string name="search_trending">Trending tags</string>
+    <string name="search_suggested">Suggested people</string>
+    <string name="search_no_results">No results for “%1$s”</string>
+    <string name="search_min_chars">Type at least 2 characters</string>
+    <string name="search_members">%1$d members</string>
+    <string name="search_ask_agent">Ask the AI agent</string>
+</resources>
