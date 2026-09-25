@@ -64,6 +64,9 @@ import com.animeblack.core.designsystem.icon.AbIcons
 import com.animeblack.core.designsystem.theme.AbColors
 import com.animeblack.core.ui.formatDuration
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import java.io.File
 
 /** Maximum video length, matching the reel upload limit. */
@@ -112,7 +115,7 @@ fun CameraScreen(allowVideo: Boolean, onCaptured: (Uri, String) -> Unit, onClose
     }
 
     LaunchedEffect(lensFacing, videoMode) {
-        val provider = ProcessCameraProvider.awaitInstance(context)
+        val provider = cameraProvider(context)
         val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         provider.unbindAll()
@@ -244,6 +247,21 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
         style = MaterialTheme.typography.labelLarge,
         modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White else Color.Transparent)
             .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+/** Suspends until CameraX is initialised (wraps the `ListenableFuture` from `getInstance`). */
+private suspend fun cameraProvider(context: Context): ProcessCameraProvider = suspendCancellableCoroutine { cont ->
+    val future = ProcessCameraProvider.getInstance(context)
+    future.addListener(
+        {
+            try {
+                cont.resume(future.get())
+            } catch (e: Exception) {
+                cont.resumeWithException(e)
+            }
+        },
+        ContextCompat.getMainExecutor(context),
     )
 }
 
