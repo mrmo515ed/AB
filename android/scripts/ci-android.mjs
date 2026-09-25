@@ -207,11 +207,18 @@ function copyApks() {
 function extractFailures(log) {
   const lines = log.split(/\r?\n/);
   const picked = [];
-  const rx = /^(e: |w: file|ERROR:|error:|FAILURE:|\* What went wrong|> |Caused by|Execution failed|.*FAILED$|.*\.kt:\d+:\d+ |.*Unresolved reference|.*Could not |.*Cannot |.*Type mismatch|.*None of the following|.*Exception|.*AAPT|.*Manifest merger|.*\[ksp\]|.*error: )/;
+  // 1) Kotlin/Java/KSP/AAPT diagnostics (one line each).
+  const rx = /^(e: |w: file:.*(deprecated|unused)|.*\.kt:\d+:\d+ |.*\.java:\d+: error|.*error: |.*\[ksp\].*|.*AAPT: error|ERROR:.*|.*Manifest merger failed.*)/;
+  for (const l of lines) if (rx.test(l) && !l.startsWith("w: ")) picked.push(l.slice(0, 1500));
+  // 2) Full "What went wrong" sections (includes AAR metadata / dependency resolution details).
   for (let i = 0; i < lines.length; i++) {
-    const l = lines[i];
-    if (rx.test(l) && !/^> Task .* (UP-TO-DATE|NO-SOURCE|SKIPPED|FROM-CACHE)$/.test(l) && !/^> Task [^ ]+$/.test(l)) {
-      picked.push(l.slice(0, 1200));
+    if (lines[i].startsWith("* What went wrong:")) {
+      const sect = [];
+      for (let j = i + 1; j < lines.length && j < i + 60; j++) {
+        if (lines[j].startsWith("* Try:") || lines[j].startsWith("* Exception is:")) break;
+        sect.push(lines[j].slice(0, 1500));
+      }
+      picked.push("--- " + sect.join("\n"));
     }
   }
   const root = ANDROID_DIR.replace(/\\/g, "/") + "/";

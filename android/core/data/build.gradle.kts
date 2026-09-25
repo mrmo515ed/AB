@@ -25,7 +25,7 @@ dependencies {
     ksp(libs.androidx.hilt.compiler)
     api(libs.androidx.paging.runtime)
 
-    implementation(platform(libs.firebase.bom))
+    api(platform(libs.firebase.bom))
     api(libs.firebase.auth)
     api(libs.firebase.firestore)
     implementation(libs.firebase.storage)
