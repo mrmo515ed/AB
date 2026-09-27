@@ -175,6 +175,9 @@ fun PostDetailScreen(navigator: HomeNavigator, onBack: () -> Unit, viewModel: Po
                         onLongPress = if (canDelete) ({ deleteComment = comment.id }) else null,
                         onMention = navigator.openMention,
                         onHashtag = { navigator.openSearch("#$it") },
+                        liked = state.me?.id?.let { it in comment.likedBy } == true,
+                        onLike = { viewModel.likeComment(comment.id) },
+                        onReply = { viewModel.replyTo(comment.user.username.ifBlank { comment.user.name }) },
                     )
                     HorizontalDivider(Modifier.widthIn(max = 720.dp).padding(horizontal = 16.dp), color = AbTheme.colors.glassBorder.copy(alpha = 0.4f))
                 }

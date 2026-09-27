@@ -20,6 +20,7 @@ import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.firebase.str
 import com.animeblack.core.data.firebase.toStringKeyed
 import com.animeblack.core.data.mapper.toMap
+import com.animeblack.core.data.mapper.toComment
 import com.animeblack.core.data.mapper.toPost
 import com.animeblack.core.data.outbox.AuthorPayload
 import com.animeblack.core.data.outbox.OutboxRepository
@@ -413,6 +414,30 @@ class FirestorePostRepository @Inject constructor(
         posts.document(postId).update(
             mapOf("comments" to FieldValue.arrayRemove(raw), "commentsCount" to FieldValue.increment(-1), "updatedAt" to System.currentTimeMillis()),
         )
+        Unit
+    }
+
+    override suspend fun toggleCommentLike(postId: String, commentId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val uid = auth.requireUid()
+        val ref = posts.document(postId)
+        firestore.runTransaction { tx ->
+            val comments = (tx.get(ref).get("comments") as? List<*>).orEmpty()
+            var changed = false
+            val updated = comments.map { raw ->
+                val map = (raw as? Map<*, *>)?.toStringKeyed() ?: return@map raw
+                val parsed = map.toComment()
+                if (parsed.id != commentId) return@map raw
+                changed = true
+                val liked = uid in parsed.likedBy
+                map.toMutableMap().apply {
+                    put("id", parsed.id)
+                    put("likedBy", if (liked) parsed.likedBy - uid else parsed.likedBy + uid)
+                    put("likes", (parsed.likes + if (liked) -1 else 1).coerceAtLeast(0))
+                }
+            }
+            if (changed) tx.update(ref, mapOf("comments" to updated, "updatedAt" to System.currentTimeMillis()))
+            null
+        }.await()
         Unit
     }
 

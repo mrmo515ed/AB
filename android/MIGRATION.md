@@ -142,7 +142,9 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 * **Firestore rules fixes (additive, web-compatible):**
   * new user documents are capped to the starter economy the clients actually write
     (coins ≤ 300, stars ≤ 15, reputation ≤ 30, level 1, no xp/gems) — previously a client could
-    create its own profile with arbitrary balances;
+    create its own profile with arbitrary balances. Matching web fix in `index.html`: a new profile
+    no longer inherits `role`, `level` or balances from local browser state (that path also produced
+    role values the rules reject, silently failing profile creation);
   * readers may update post reaction counters `reacts`/`reposts` (web + Android already write them);
   * story viewers may append `views`/`reactions` (views can only grow) — previously denied.
 * Deep links: ids validated against the rules' charset; deep links never bypass sign-in.

@@ -302,10 +302,14 @@ async function smokeTest(apkPath) {
   const install = sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" > /tmp/sdk.log 2>&1; echo "exit=$?"; tr '\\r' '\\n' < /tmp/sdk.log | grep -viE '^\\s*\\[|^\\s*$' | tail -3`, { timeout: 20 * 60 * 1000 });
   summary.push(`sdk: ${install.replace(/\s+/g, " ").slice(0, 300)}`);
   summary.push(`image: ${sh(`ls ${androidHome}/system-images/android-34/google_apis/x86_64 2>&1 | head -5 | tr '\\n' ' '`)}`);
-  summary.push(`avd: ${sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" --force 2>&1 | tail -2 | tr '\\n' ' '`)}`);
-  summary.push(`avds: ${sh(`${androidHome}/emulator/emulator -list-avds 2>&1 | tr '\\n' ' '`)}`);
+  // avdmanager honours XDG_CONFIG_HOME (set on GitHub runners) but the emulator looks in
+  // ~/.android/avd, so pin one location for both tools.
+  const avdHome = path.join(process.env.HOME || "/tmp", ".android", "avd");
+  fs.mkdirSync(avdHome, { recursive: true });
+  summary.push(`avd: ${sh(`echo no | ANDROID_AVD_HOME=${avdHome} ${tools}/avdmanager create avd -n smoke -k "${img}" --force 2>&1 | tail -2 | tr '\\n' ' '`)}`);
+  summary.push(`avds: ${sh(`ANDROID_AVD_HOME=${avdHome} ${androidHome}/emulator/emulator -list-avds 2>&1 | tr '\\n' ' '`)}`);
   const logFd = fs.openSync("/tmp/emulator.log", "w");
-  const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-camera-back", "none", "-accel", "on", "-memory", "3072"], { detached: true, stdio: ["ignore", logFd, logFd] });
+  const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-camera-back", "none", "-accel", "on", "-memory", "3072"], { detached: true, stdio: ["ignore", logFd, logFd], env: { ...process.env, ANDROID_AVD_HOME: avdHome } });
   emu.unref();
   sh(`timeout 300 ${adb} wait-for-device`, { timeout: 6 * 60 * 1000 });
   let booted = false;

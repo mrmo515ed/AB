@@ -382,6 +382,35 @@ class FirestoreCommunityRepository @Inject constructor(
         Unit
     }
 
+    override suspend fun sendRoomSticker(room: RoomRef, url: String, type: String): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val uid = auth.requireUid()
+        val kind = if (type == "gif") "gif" else "sticker"
+        if (!(url.startsWith("https://") || url.startsWith("data:image/"))) throw AppErrorException(AppError.Validation("message", "invalid"))
+        val me = users.getUser(uid)
+        val id = Ids.message()
+        val now = System.currentTimeMillis()
+        val doc = mapOf(
+            "id" to id,
+            "uid" to uid,
+            "senderId" to uid,
+            "senderName" to me?.displayName.orEmpty(),
+            "senderAvatar" to me?.avatar.orEmpty(),
+            "text" to "",
+            "type" to kind,
+            "attachments" to listOf(mapOf("type" to kind, "src" to url, "name" to kind, "size" to 0)),
+            "src" to url,
+            "at" to now,
+            "createdAt" to now,
+            "st" to 2,
+            "platform" to "android",
+        )
+        roomMessages(room).document(id).set(doc)
+        if (room is RoomRef.GroupRoom) {
+            groups.document(room.id).update(mapOf("lastMsg" to if (kind == "gif") "GIF" else "ملصق", "lastAt" to now, "updatedAt" to now))
+        }
+        Unit
+    }
+
     override suspend fun deleteRoomMessage(room: RoomRef, messageId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         roomMessages(room).document(messageId).delete()
         Unit

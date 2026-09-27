@@ -17,7 +17,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.animeblack.core.designsystem.component.Avatar
 import com.animeblack.core.designsystem.component.VerifiedBadge
+import com.animeblack.core.designsystem.component.AbIcon
+import com.animeblack.core.designsystem.icon.AbIcons
+import com.animeblack.core.designsystem.theme.AbColors
 import com.animeblack.core.designsystem.theme.AbTheme
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.animeblack.core.model.Comment
 import com.animeblack.core.model.User
 
@@ -68,6 +74,9 @@ fun CommentItem(
     onLongPress: (() -> Unit)? = null,
     onMention: (String) -> Unit = {},
     onHashtag: (String) -> Unit = {},
+    liked: Boolean = false,
+    onLike: (() -> Unit)? = null,
+    onReply: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -88,6 +97,36 @@ fun CommentItem(
                 Text(relativeTime(comment.createdAt), style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted)
             }
             LinkifiedText(comment.text, style = MaterialTheme.typography.bodyMedium, onMention = onMention, onHashtag = onHashtag)
+            if (onLike != null || onReply != null) {
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onLike != null) {
+                        Row(
+                            Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onLike).padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AbIcon(
+                                if (liked) AbIcons.FavoriteFilled else AbIcons.Favorite,
+                                stringResource(R.string.ui_like),
+                                tint = if (liked) AbColors.Rose else AbTheme.colors.textMuted,
+                                size = 16.dp,
+                            )
+                            if (comment.likes > 0) {
+                                Spacer(Modifier.width(4.dp))
+                                Text(compactCount(comment.likes), style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted)
+                            }
+                        }
+                    }
+                    if (onReply != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.ui_chat_reply),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AbTheme.colors.textMuted,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onReply).padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -135,6 +135,8 @@ interface PostRepository {
     suspend fun react(post: Post, reactionKey: String): AppResult<Unit>
     suspend fun addComment(postId: String, text: String, replyToId: String? = null): AppResult<Unit>
     suspend fun deleteComment(postId: String, commentId: String): AppResult<Unit>
+    /** Per-user like on an embedded comment (keeps the web's `likes` count, tracks `likedBy`). */
+    suspend fun toggleCommentLike(postId: String, commentId: String): AppResult<Unit>
     suspend fun votePoll(postId: String, optionId: String): AppResult<Unit>
     suspend fun share(postId: String): AppResult<Unit>
     suspend fun setSaved(postId: String, saved: Boolean): AppResult<Unit>
@@ -233,6 +235,8 @@ interface CommunityRepository {
 
     fun observeRoomMessages(room: RoomRef, limit: Long): Flow<List<ChatMessage>>
     suspend fun sendRoomMessage(room: RoomRef, text: String, attachments: List<LocalMedia> = emptyList(), replyTo: com.animeblack.core.model.MessageQuote? = null): AppResult<Unit>
+    /** Sticker (SVG data URL) or GIF message — same shape as private chat stickers. */
+    suspend fun sendRoomSticker(room: RoomRef, url: String, type: String): AppResult<Unit>
     suspend fun deleteRoomMessage(room: RoomRef, messageId: String): AppResult<Unit>
 }
 

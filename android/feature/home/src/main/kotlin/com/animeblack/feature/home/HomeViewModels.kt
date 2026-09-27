@@ -156,6 +156,13 @@ class PostDetailViewModel @Inject constructor(
     }
 
     fun deleteComment(commentId: String) = viewModelScope.launch { emitError(posts.deleteComment(route.postId, commentId)) }
+    fun likeComment(commentId: String) = viewModelScope.launch { emitError(posts.toggleCommentLike(route.postId, commentId)) }
+
+    /** Web `replyTo`: prefix the input with @username (replacing a previous mention prefix). */
+    fun replyTo(username: String) {
+        if (username.isBlank()) return
+        comment.value = "@" + username.removePrefix("@") + " " + comment.value.replace(Regex("^@\\S+\\s*"), "")
+    }
 }
 
 data class ComposerUiState(

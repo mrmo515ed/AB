@@ -225,6 +225,8 @@ fun RoomScreen(
                         onPickFile = { filePicker.launch(arrayOf("*/*")) },
                         onCamera = actions.openCamera,
                         onVoiceRecorded = viewModel::sendVoice,
+                        onSticker = viewModel::sendSticker,
+                        onGif = viewModel::sendGif,
                         enabled = state.canSend,
                         disabledHint = stringResource(if (header.closed) R.string.community_room_closed else R.string.community_room_announce_only),
                         sending = composer.sending,

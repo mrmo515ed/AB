@@ -253,6 +253,17 @@ class RoomViewModel @Inject constructor(
         if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
     }
 
+    fun sendSticker(url: String) = sendHosted(url, "sticker")
+    fun sendGif(url: String) = sendHosted(url, "gif")
+
+    private fun sendHosted(url: String, type: String) {
+        if (!state.value.canSend) return
+        viewModelScope.launch {
+            val r = repository.sendRoomSticker(room, url, type)
+            if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
+        }
+    }
+
     fun delete(message: ChatMessage) = viewModelScope.launch {
         val r = repository.deleteRoomMessage(room, message.id)
         if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
