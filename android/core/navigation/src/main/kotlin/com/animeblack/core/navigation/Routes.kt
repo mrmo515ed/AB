@@ -3,11 +3,9 @@ package com.animeblack.core.navigation
 import kotlinx.serialization.Serializable
 
 // ------------------------------------------------------------------ Auth
-@Serializable data object SplashRoute
 @Serializable data object LoginRoute
 @Serializable data object SignUpRoute
 @Serializable data object ForgotPasswordRoute
-@Serializable data object CompleteProfileRoute
 @Serializable data object AccountSwitcherRoute
 
 // ------------------------------------------------------------------ Top-level destinations (bottom bar)
@@ -23,7 +21,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class CreatePostRoute(val editPostId: String? = null, val quotePostId: String? = null, val sharedText: String? = null)
 @Serializable data class StoryViewerRoute(val userId: String)
 @Serializable data object CreateStoryRoute
-@Serializable data object MyStoriesRoute
 @Serializable data class CameraRoute(val allowVideo: Boolean = false)
 @Serializable data class MediaViewerRoute(val url: String, val type: String = "image")
 

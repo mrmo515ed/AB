@@ -1,3 +1,4 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import groovy.json.JsonSlurper
 import java.util.Properties
 
@@ -93,6 +94,11 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Without release credentials the release APK is produced unsigned (app-release-unsigned.apk).
             signingConfig = signingConfigs.findByName("release")
+            // Uploading R8 mapping files needs the registered Android app (google-services.json);
+            // otherwise the Crashlytics plugin cannot even create the upload task.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = hasGoogleServicesJson
+            }
         }
     }
 

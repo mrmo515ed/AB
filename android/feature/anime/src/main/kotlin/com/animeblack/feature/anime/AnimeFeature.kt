@@ -132,7 +132,7 @@ class AnimeHubViewModel @Inject constructor(private val repository: AnimeReposit
                 return@transformLatest
             }
             emit(Triple(q, true, null))
-            emit(Triple(q, false, (repository.search(q, t) as? AppResult.Success)?.data.orEmpty()))
+            emit(Triple(q, false, (repository.search(q, t) as? AppResult.Success)?.data.orEmpty().distinctBy { it.source + it.id }))
         }
 
     val state: StateFlow<AnimeHubUiState> = combine(base, search, mediaType) { b, (q, searching, results), t ->
@@ -151,8 +151,9 @@ class AnimeHubViewModel @Inject constructor(private val repository: AnimeReposit
             it.copy(
                 loading = false,
                 error = trending is AppResult.Failure && seasonal is AppResult.Failure,
-                trending = (trending as? AppResult.Success)?.data.orEmpty(),
-                seasonal = (seasonal as? AppResult.Success)?.data.orEmpty(),
+                // Jikan can return the same title twice; lazy-list keys must be unique.
+                trending = (trending as? AppResult.Success)?.data.orEmpty().distinctBy { a -> a.source + a.id },
+                seasonal = (seasonal as? AppResult.Success)?.data.orEmpty().distinctBy { a -> a.source + a.id },
             )
         }
     }

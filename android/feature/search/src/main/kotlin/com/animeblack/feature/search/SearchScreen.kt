@@ -133,7 +133,7 @@ class SearchViewModel @Inject constructor(
                     SearchTab.People -> SearchResults(q, people = (users.searchUsers(q.removePrefix("@"), 30) as? AppResult.Success)?.data.orEmpty())
                     SearchTab.Posts -> SearchResults(q, posts = (posts.searchPosts(q) as? AppResult.Success)?.data.orEmpty())
                     SearchTab.Groups -> SearchResults(q)
-                    SearchTab.Anime -> SearchResults(q, anime = (anime.search(q) as? AppResult.Success)?.data.orEmpty())
+                    SearchTab.Anime -> SearchResults(q, anime = (anime.search(q) as? AppResult.Success)?.data.orEmpty().distinctBy { it.source + it.id })
                 },
             )
         }

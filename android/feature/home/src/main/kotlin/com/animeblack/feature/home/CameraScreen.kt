@@ -115,14 +115,21 @@ fun CameraScreen(allowVideo: Boolean, onCaptured: (Uri, String) -> Unit, onClose
     }
 
     LaunchedEffect(lensFacing, videoMode) {
-        val provider = cameraProvider(context)
-        val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
-        val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-        provider.unbindAll()
-        if (videoMode) {
-            provider.bindToLifecycle(lifecycleOwner, selector, preview, videoCapture)
-        } else {
-            provider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture)
+        try {
+            val provider = cameraProvider(context)
+            val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+            val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+            provider.unbindAll()
+            if (videoMode) {
+                provider.bindToLifecycle(lifecycleOwner, selector, preview, videoCapture)
+            } else {
+                provider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // No usable camera for this lens (emulators, some tablets): fall back or close.
+            if (lensFacing == CameraSelector.LENS_FACING_FRONT) lensFacing = CameraSelector.LENS_FACING_BACK else onClose()
         }
     }
     LaunchedEffect(flash) { imageCapture.flashMode = flash }

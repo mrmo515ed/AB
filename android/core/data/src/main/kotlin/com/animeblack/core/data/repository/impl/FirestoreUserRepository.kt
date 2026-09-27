@@ -129,7 +129,8 @@ class FirestoreUserRepository @Inject constructor(
     override fun observeFollowList(uid: String, followers: Boolean): Flow<List<User>> =
         observeUser(uid).flatMapLatest { user ->
             val ids = if (followers) user?.followersList.orEmpty() else user?.followingList.orEmpty()
-            observeUsers(ids.take(300)).map { map -> ids.mapNotNull { map[it] } }
+            val unique = ids.distinct().take(300)
+            observeUsers(unique).map { map -> unique.mapNotNull { map[it] } }
         }
 
     override suspend fun isUsernameAvailable(username: String): AppResult<Boolean> = runCatchingApp(errorMapper) {

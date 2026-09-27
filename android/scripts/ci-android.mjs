@@ -14,10 +14,12 @@
  *       [android-probe]   report runner toolchain + latest stable library versions.
  *       [android-report]  push android/ci-reports/* (build report + log tail) back to the branch.
  *       [android-apk]     also push the built APKs to android/apk/ on the same branch.
+ *       [android-smoke]   boot an emulator, install the debug APK, launch it (and a deep link)
+ *                         and report crashes / process state / visible UI texts.
  *     Pushes use the workflow's own checkout credentials and only target the branch that
  *     triggered the run. Commits carry [skip ci] so they never trigger another run.
  */
-import { execSync, spawnSync } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -261,6 +263,86 @@ function pushBack(files, message) {
   return true;
 }
 
+
+/** Recursively collects JUnit XML results from every module. */
+function collectTestResults() {
+  const out = { suites: 0, tests: 0, failures: 0, errors: 0, skipped: 0, failed: [] };
+  const walk = (dir, depth) => {
+    if (depth > 6 || !fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === ".gradle") continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (e.name.endsWith(".xml") && p.includes(`${path.sep}test-results${path.sep}`)) {
+        const t = fs.readFileSync(p, "utf8");
+        const m = t.match(/<testsuite[^>]*name="([^"]*)"[^>]*tests="(\d+)"[^>]*skipped="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"/);
+        if (!m) continue;
+        out.suites++; out.tests += +m[2]; out.skipped += +m[3]; out.failures += +m[4]; out.errors += +m[5];
+        const re = /<testcase name="([^"]*)" classname="([^"]*)"[^>]*>\s*<(failure|error) message="([^"]*)"/g;
+        let f;
+        while ((f = re.exec(t))) out.failed.push(`${f[2]} > ${f[1]}: ${f[4].replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, " ").slice(0, 400)}`);
+      }
+    }
+  };
+  walk(ANDROID_DIR, 0);
+  return out;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Boots an emulator, installs + launches the APK and reports what happened. */
+async function smokeTest(apkPath) {
+  const t0 = Date.now();
+  const lines = [];
+  const adb = `${androidHome}/platform-tools/adb`;
+  const tools = fs.existsSync(`${androidHome}/cmdline-tools/latest/bin`) ? `${androidHome}/cmdline-tools/latest/bin` : sh(`ls -d ${androidHome}/cmdline-tools/*/bin | tail -1`);
+  sh(`echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules && sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm`);
+  lines.push(`kvm: ${sh("ls -l /dev/kvm")}`);
+  const img = "system-images;android-35;google_apis;x86_64";
+  lines.push(sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" > /tmp/sdk.log 2>&1; tail -3 /tmp/sdk.log`, { timeout: 20 * 60 * 1000 }));
+  lines.push(sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" -d pixel_6 --force 2>&1 | tail -2`));
+  const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-memory", "4096"], { detached: true, stdio: "ignore" });
+  emu.unref();
+  sh(`${adb} wait-for-device`, { timeout: 8 * 60 * 1000 });
+  let booted = false;
+  for (let i = 0; i < 120 && !booted; i++) {
+    booted = sh(`${adb} shell getprop sys.boot_completed`).trim() === "1";
+    if (!booted) await sleep(5000);
+  }
+  lines.push(`booted: ${booted} after ${Math.round((Date.now() - t0) / 1000)}s`);
+  if (!booted) return { ok: false, text: lines.join("\n") };
+  sh(`${adb} shell settings put global window_animation_scale 0; ${adb} shell settings put global transition_animation_scale 0; ${adb} shell settings put global animator_duration_scale 0`);
+  lines.push(`install: ${sh(`${adb} install -r -g ${JSON.stringify(apkPath)} 2>&1 | tail -2`)}`);
+  sh(`${adb} logcat -c`);
+  const uiTexts = () => {
+    sh(`${adb} shell uiautomator dump /sdcard/ui.xml`);
+    const xml = sh(`${adb} shell cat /sdcard/ui.xml`);
+    const texts = [...xml.matchAll(/(?:text|content-desc)="([^"]+)"/g)].map((m) => m[1]).filter((x) => x.trim());
+    return [...new Set(texts)].slice(0, 60).join(" | ");
+  };
+  lines.push(`launch: ${sh(`${adb} shell am start -W -n com.animeblack.app/.MainActivity 2>&1 | tail -4`)}`);
+  await sleep(25000);
+  lines.push(`pid after launch: ${sh(`${adb} shell pidof com.animeblack.app`) || "(not running)"}`);
+  lines.push(`ui (en): ${uiTexts()}`);
+  // RTL: switch the app to Arabic via the per-app locale service (Android 13+) and relaunch.
+  sh(`${adb} shell cmd locale set-app-locales com.animeblack.app --locales ar`);
+  await sleep(4000);
+  sh(`${adb} shell am force-stop com.animeblack.app; ${adb} shell am start -W -n com.animeblack.app/.MainActivity`);
+  await sleep(15000);
+  lines.push(`ui (ar): ${uiTexts()}`);
+  // Deep link while signed out must stay on the sign-in screen without crashing.
+  sh(`${adb} shell am start -W -a android.intent.action.VIEW -d "animeblack://post/p_test" com.animeblack.app`);
+  await sleep(8000);
+  lines.push(`pid after deep link: ${sh(`${adb} shell pidof com.animeblack.app`) || "(not running)"}`);
+  const crash = sh(`${adb} logcat -d -b crash`);
+  const fatal = sh(`${adb} logcat -d AndroidRuntime:E *:S | tail -80`);
+  const appLog = sh(`${adb} logcat -d --pid=$(${adb} shell pidof com.animeblack.app) *:W | tail -60`);
+  lines.push("--- crash buffer ---", crash.slice(-8000) || "(empty)", "--- AndroidRuntime ---", fatal.slice(-8000) || "(empty)", "--- app warnings ---", appLog.slice(-6000));
+  sh(`${adb} emu kill`);
+  const ok = !/FATAL EXCEPTION/.test(crash + fatal);
+  return { ok, text: lines.join("\n") };
+}
+
 async function main() {
   if (!isCI || !androidHome) {
     console.log("[android-ci] Not running on CI with an Android SDK — skipping native build (use `cd android && ./gradlew assembleDebug`).");
@@ -314,16 +396,20 @@ async function main() {
       fs.copyFileSync(lintReport, path.join(REPORT_DIR, "lint-results-debug.txt"));
       pushFiles.push(path.join(REPORT_DIR, "lint-results-debug.txt"));
     }
-    const testDir = path.join(ANDROID_DIR, "app/build/test-results/testDebugUnitTest");
-    if (fs.existsSync(testDir)) {
-      const xmls = fs.readdirSync(testDir).filter((f) => f.endsWith(".xml"));
-      let tests = 0, failuresN = 0, errors = 0, skipped = 0;
-      for (const x of xmls) {
-        const t = fs.readFileSync(path.join(testDir, x), "utf8");
-        const m = t.match(/<testsuite[^>]*tests="(\d+)"[^>]*skipped="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"/);
-        if (m) { tests += +m[1]; skipped += +m[2]; failuresN += +m[3]; errors += +m[4]; }
+    const tr = collectTestResults();
+    if (tr.suites > 0) {
+      report.push(`## Unit tests`, `- suites: ${tr.suites}, tests: ${tr.tests}, failures: ${tr.failures}, errors: ${tr.errors}, skipped: ${tr.skipped}`, ...tr.failed.map((f) => `- ${f}`), "");
+      annotate(tr.failures + tr.errors > 0 ? "error" : "notice", "android-ci tests", `suites ${tr.suites}, tests ${tr.tests}, failures ${tr.failures}, errors ${tr.errors}, skipped ${tr.skipped}\n${tr.failed.join("\n")}`);
+    }
+    if (msg.includes("[android-smoke]")) {
+      const debugApk = apks.find((a) => a.kind === "debug");
+      if (debugApk) {
+        const smoke = await smokeTest(debugApk.src);
+        annotate(smoke.ok ? "notice" : "error", "android-smoke", smoke.text);
+        report.push("## Emulator smoke test", "```", smoke.text.slice(0, 60000), "```", "");
+      } else {
+        annotate("warning", "android-smoke", "No debug APK to test.");
       }
-      report.push(`## Unit tests`, `- suites: ${xmls.length}, tests: ${tests}, failures: ${failuresN}, errors: ${errors}, skipped: ${skipped}`, "");
     }
     if (wantApk && res.ok) {
       const apkOut = path.join(ANDROID_DIR, "apk");

@@ -16,3 +16,7 @@ release-signing.properties
 keystore.properties
 
 # Firebase: a real google-services.json may be committed by the project owner if desired.
+
+# Python helper caches
+__pycache__/
+*.pyc
