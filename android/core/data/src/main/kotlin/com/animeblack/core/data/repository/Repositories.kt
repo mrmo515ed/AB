@@ -306,6 +306,11 @@ interface AdminRepository {
     fun observeRecentUsers(): Flow<List<User>>
 }
 
+/** Level badges defined by admins (web badge editor) with built-in defaults as fallback. */
+interface LevelBadgeRepository {
+    fun observeCatalog(): Flow<com.animeblack.core.model.LevelBadgeCatalog>
+}
+
 interface ReportRepository {
     suspend fun report(targetType: String, targetId: String, reason: String, details: String): AppResult<Unit>
 }

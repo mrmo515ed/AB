@@ -131,4 +131,16 @@ data class Thought(
 )
 
 /** Level badge definitions (`level_badges`) and the active level mapping (`level_mappings/active`). */
-data class LevelBadge(val id: String, val name: String, val icon: String = "", val color: String = "", val minLevel: Int = 0, val image: String = "")
+data class LevelBadge(
+    val id: String,
+    val name: String,
+    val icon: String = "",
+    val color: String = "",
+    val minLevel: Int = 0,
+    /** https URL or data: URL (PNG from the web badge editor, or SVG artwork). */
+    val image: String = "",
+    val description: String = "",
+    /** English texts for the built-in badges (server-defined badges have a single language). */
+    val nameEn: String? = null,
+    val descriptionEn: String? = null,
+)

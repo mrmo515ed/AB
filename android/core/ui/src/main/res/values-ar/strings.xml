@@ -83,4 +83,7 @@
     <string name="ui_chat_remove_attachment">إزالة المرفق</string>
     <string name="ui_chat_typing">يكتب…</string>
     <string name="ui_chat_scroll_latest">الانتقال إلى الأحدث</string>
+    <string name="ui_chat_stickers">الملصقات</string>
+    <string name="ui_chat_gifs">صور متحركة</string>
+    <string name="ui_chat_gif_search">ابحث في الصور المتحركة</string>
 </resources>

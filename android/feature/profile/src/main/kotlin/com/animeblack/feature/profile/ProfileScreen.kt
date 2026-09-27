@@ -73,6 +73,12 @@ import com.animeblack.core.designsystem.theme.AbColors
 import com.animeblack.core.model.MediaItem
 import com.animeblack.core.model.Post
 import com.animeblack.core.model.User
+import com.animeblack.core.ui.rarityColor
+import com.animeblack.core.ui.displayName
+import com.animeblack.core.ui.LevelBadgeImage
+import com.animeblack.core.model.rankFor
+import com.animeblack.core.model.achievementBadge
+import com.animeblack.core.model.LevelBadgeCatalog
 import com.animeblack.core.ui.LinkifiedText
 import com.animeblack.core.ui.PostActions
 import com.animeblack.core.ui.PostCard
@@ -103,6 +109,7 @@ data class ProfileActions(
 @Composable
 fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val levelCatalog by viewModel.levelCatalog.collectAsStateWithLifecycle()
     val posts = viewModel.posts.collectAsLazyPagingItems()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -160,7 +167,7 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
             state.loading -> LoadingState(Modifier.padding(padding))
             state.notFound || user == null -> EmptyState(title = stringResource(R.string.profile_not_found), icon = AbIcons.PersonSearch, modifier = Modifier.padding(padding))
             else -> LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 32.dp)) {
-                item(key = "header") { ProfileHeader(user, state, actions, onFollow = viewModel::toggleFollow, onUnblock = viewModel::toggleBlock) }
+                item(key = "header") { ProfileHeader(user, state, levelCatalog, actions, onFollow = viewModel::toggleFollow, onUnblock = viewModel::toggleBlock) }
                 when {
                     state.blocked -> item(key = "blocked") {
                         EmptyState(title = stringResource(R.string.profile_blocked), icon = AbIcons.Block, actionLabel = stringResource(R.string.profile_unblock), onAction = viewModel::toggleBlock)
@@ -295,7 +302,7 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProfileHeader(user: User, state: ProfileUiState, actions: ProfileActions, onFollow: () -> Unit, onUnblock: () -> Unit) {
+private fun ProfileHeader(user: User, state: ProfileUiState, levelCatalog: LevelBadgeCatalog, actions: ProfileActions, onFollow: () -> Unit, onUnblock: () -> Unit) {
     val context = LocalContext.current
     Column {
         Box {
@@ -364,7 +371,11 @@ private fun ProfileHeader(user: User, state: ProfileUiState, actions: ProfileAct
             if (state.isMe || user.privacy.whoSeesLevel == "everyone") {
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Pill(stringResource(R.string.profile_level, user.level), color = AbColors.DeepPurple)
+                    levelCatalog.badgeFor(user.level)?.let { (_, badge) ->
+                        LevelBadgeImage(badge, size = 30.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Pill(stringResource(R.string.profile_level, user.level) + " · " + rankFor(user.level).displayName(), color = AbColors.DeepPurple)
                     Spacer(Modifier.width(10.dp))
                     LinearProgressIndicator(
                         progress = { if (user.xpNext > 0) (user.xp.toFloat() / user.xpNext).coerceIn(0f, 1f) else 0f },
@@ -383,8 +394,13 @@ private fun ProfileHeader(user: User, state: ProfileUiState, actions: ProfileAct
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                user.badges.take(12).forEach { badge ->
-                    Pill(badge.removePrefix("badge_").replace('_', ' ').replaceFirstChar { it.uppercase() }, color = AbColors.Charcoal3, textColor = AbColors.Gold)
+                user.badges.take(12).forEach { id ->
+                    val known = achievementBadge(id)
+                    Pill(
+                        known?.displayName() ?: id.removePrefix("badge_").replace('_', ' ').replaceFirstChar { it.uppercase() },
+                        color = AbColors.Charcoal3,
+                        textColor = known?.let { rarityColor(it.rarity) } ?: AbColors.Gold,
+                    )
                 }
             }
         }

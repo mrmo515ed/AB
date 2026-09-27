@@ -81,6 +81,14 @@ import com.animeblack.core.designsystem.component.VerifiedBadge
 import com.animeblack.core.designsystem.icon.AbIcons
 import com.animeblack.core.designsystem.theme.AbColors
 import com.animeblack.core.model.Post
+import com.animeblack.core.ui.rarityColor
+import com.animeblack.core.ui.displayName
+import com.animeblack.core.ui.displayDescription
+import com.animeblack.core.ui.LevelBadgeImage
+import com.animeblack.core.model.rankFor
+import com.animeblack.core.model.nextRank
+import com.animeblack.core.model.achievementBadge
+import com.animeblack.core.model.ACHIEVEMENT_BADGES
 import com.animeblack.core.model.Thought
 import com.animeblack.core.navigation.AdminRoute
 import com.animeblack.core.navigation.AnimeDetailRoute
@@ -285,55 +293,139 @@ private fun Balance(label: String, value: Long, color: Color) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LevelsScreen(onBack: () -> Unit, viewModel: LevelsViewModel = hiltViewModel()) {
-    val me by viewModel.me.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(topBar = { AbTopBar(title = stringResource(R.string.levels_title), onBack = onBack) }) { padding ->
-        val user = me
+        val user = state.me
         if (user == null) {
             LoadingState(Modifier.padding(padding))
             return@Scaffold
         }
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(AbColors.AuroraGradient).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(R.string.levels_current), color = Color.White.copy(alpha = 0.8f))
-                Text(user.level.toString(), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black, color = Color.White)
-                LinearProgressIndicator(
-                    progress = { if (user.xpNext > 0) (user.xp.toFloat() / user.xpNext).coerceIn(0f, 1f) else 0f },
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.25f),
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(stringResource(R.string.levels_progress, user.xp.toInt(), user.xpNext.toInt(), user.level + 1), color = Color.White, style = MaterialTheme.typography.labelMedium)
+        val rank = rankFor(user.level)
+        val next = nextRank(user.level)
+        val current = state.catalog.badgeFor(user.level)
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(AbColors.AuroraGradient).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    current?.let { (_, badge) -> LevelBadgeImage(badge, size = 72.dp) }
+                    Text(stringResource(R.string.levels_current), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(top = 8.dp))
+                    Text(user.level.toString(), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black, color = Color.White)
+                    Text(stringResource(R.string.levels_rank, rank.displayName()), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { if (user.xpNext > 0) (user.xp.toFloat() / user.xpNext).coerceIn(0f, 1f) else 0f },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.25f),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.levels_progress, user.xp.toInt(), user.xpNext.toInt(), user.level + 1), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        next?.let { stringResource(R.string.levels_next_rank, it.displayName(), it.level) } ?: stringResource(R.string.levels_max_rank),
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
-            Text(stringResource(R.string.levels_how), color = AbColors.TextSecondary)
-            SectionHeader(stringResource(R.string.levels_badges))
-            if (user.badges.isEmpty()) {
-                Text(stringResource(R.string.levels_no_badges), color = AbColors.TextMuted)
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    user.badges.forEach { b ->
-                        Row(
-                            Modifier.clip(RoundedCornerShape(14.dp)).background(AbColors.Charcoal3).padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            AbIcon(AbIcons.MilitaryTech, null, tint = AbColors.Gold, size = 18.dp)
-                            Spacer(Modifier.width(6.dp))
-                            Text(b.removePrefix("badge_").replace('_', ' ').replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelLarge)
+            item { Text(stringResource(R.string.levels_how), color = AbColors.TextSecondary) }
+            current?.let { (_, badge) ->
+                item {
+                    GlassCard(Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LevelBadgeImage(badge, size = 52.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(R.string.levels_current_badge), style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                Text(badge.displayName(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                if (badge.displayDescription().isNotBlank()) Text(badge.displayDescription(), style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                            }
                         }
                     }
                 }
             }
+            item { SectionHeader(stringResource(R.string.levels_road)) }
+            items(state.catalog.road(), key = { "road_" + it.first }) { (level, badge) ->
+                val unlocked = user.level >= level
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(if (current?.first == level) AbColors.DeepPurple.copy(alpha = 0.25f) else AbColors.Charcoal2).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LevelBadgeImage(badge, size = 44.dp, locked = !unlocked)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(badge.displayName(), style = MaterialTheme.typography.titleSmall, color = if (unlocked) AbColors.TextPrimary else AbColors.TextMuted)
+                        Text(stringResource(R.string.more_level, level), style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                    }
+                    if (unlocked) {
+                        Pill(stringResource(R.string.levels_unlocked), color = AbColors.Emerald)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AbIcon(AbIcons.Lock, null, tint = AbColors.TextMuted, size = 16.dp)
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.levels_reach, level), style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                        }
+                    }
+                }
+            }
+            item { SectionHeader(stringResource(R.string.levels_achievements)) }
+            items(ACHIEVEMENT_BADGES, key = { "ach_" + it.id }) { badge ->
+                val earned = badge.id in user.badges
+                val color = rarityColor(badge.rarity)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AbColors.Charcoal2).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = if (earned) 0.22f else 0.08f)), contentAlignment = Alignment.Center) {
+                        AbIcon(achievementIcon(badge.icon), null, tint = if (earned) color else AbColors.TextMuted)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(badge.displayName(), style = MaterialTheme.typography.titleSmall, color = if (earned) AbColors.TextPrimary else AbColors.TextMuted)
+                        Text(badge.displayDescription(), style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(stringResource(rarityLabel(badge.rarity)), style = MaterialTheme.typography.labelSmall, color = color)
+                        if (earned) Text(stringResource(R.string.levels_earned), style = MaterialTheme.typography.labelSmall, color = AbColors.Emerald)
+                    }
+                }
+            }
+            val extra = user.badges.filter { achievementBadge(it) == null }
+            if (extra.isNotEmpty()) {
+                item {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        extra.forEach { b -> Pill(b.removePrefix("badge_").replace('_', ' ').replaceFirstChar { it.uppercase() }, color = AbColors.Charcoal3, textColor = AbColors.Gold) }
+                    }
+                }
+            }
             if (user.titles.isNotEmpty()) {
-                SectionHeader(stringResource(R.string.levels_titles))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    user.titles.forEach { t -> Pill(t, color = if (t == user.equippedTitle) AbColors.DeepPurple else AbColors.Charcoal3) }
+                item { SectionHeader(stringResource(R.string.levels_titles)) }
+                item {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        user.titles.forEach { t -> Pill(t, color = if (t == user.equippedTitle) AbColors.DeepPurple else AbColors.Charcoal3) }
+                    }
                 }
             }
         }
     }
+}
+
+private fun rarityLabel(rarity: String): Int = when (rarity.lowercase()) {
+    "rare" -> R.string.levels_rarity_rare
+    "epic" -> R.string.levels_rarity_epic
+    "legendary" -> R.string.levels_rarity_legendary
+    else -> R.string.levels_rarity_common
+}
+
+private fun achievementIcon(icon: String): Int = when (icon) {
+    "compass" -> AbIcons.Explore
+    "sparkles" -> AbIcons.AutoAwesome
+    "crown" -> AbIcons.WorkspacePremium
+    "heart" -> AbIcons.FavoriteFilled
+    else -> AbIcons.StarFilled
 }
 
 // ============================================================================ Workspace

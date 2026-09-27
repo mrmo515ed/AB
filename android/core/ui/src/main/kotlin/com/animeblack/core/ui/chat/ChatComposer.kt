@@ -6,6 +6,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import com.animeblack.core.ui.rememberImageModel
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +88,8 @@ fun ChatComposer(
     onPickFile: (() -> Unit)? = null,
     onCamera: (() -> Unit)? = null,
     onVoiceRecorded: ((VoiceClip) -> Unit)? = null,
+    onSticker: ((String) -> Unit)? = null,
+    onGif: ((String) -> Unit)? = null,
     enabled: Boolean = true,
     disabledHint: String? = null,
     sending: Boolean = false,
@@ -86,6 +100,8 @@ fun ChatComposer(
     var elapsed by remember { mutableLongStateOf(0L) }
     var attachMenu by remember { mutableStateOf(false) }
     var micDenied by remember { mutableStateOf(false) }
+    var stickers by remember { mutableStateOf(false) }
+    var gifs by remember { mutableStateOf(false) }
 
     fun startRecording() {
         micDenied = false
@@ -199,6 +215,12 @@ fun ChatComposer(
                         }
                     }
                 }
+                if (onSticker != null && !editing) {
+                    AbIconButton(AbIcons.Mood, stringResource(R.string.ui_chat_stickers), onClick = { stickers = true }, tint = AbColors.Gold)
+                }
+                if (onGif != null && !editing && text.isBlank()) {
+                    AbIconButton(AbIcons.GifBox, stringResource(R.string.ui_chat_gifs), onClick = { gifs = true }, tint = AbColors.Cyan)
+                }
                 TextField(
                     value = text,
                     onValueChange = { onTextChange(it.take(MAX_MESSAGE_LENGTH)) },
@@ -235,9 +257,110 @@ fun ChatComposer(
             }
         }
     }
+    if (stickers && onSticker != null) {
+        StickerSheet(onDismiss = { stickers = false }, onPick = { url ->
+            stickers = false
+            onSticker(url)
+        })
+    }
+    if (gifs && onGif != null) {
+        GifSheet(onDismiss = { gifs = false }, onPick = { url ->
+            gifs = false
+            onGif(url)
+        })
+    }
 }
 
 const val MAX_MESSAGE_LENGTH = 4_000
+
+@Composable
+private fun StickerSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    var tab by remember { mutableStateOf(0) }
+    val arabic = LocalConfiguration.current.locales[0].language == "ar"
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AbColors.Charcoal2) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+            PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = Color.Transparent, edgePadding = 12.dp) {
+                STICKER_PACKS.forEachIndexed { i, pack ->
+                    Tab(selected = tab == i, onClick = { tab = i }, text = { Text(if (arabic) pack.nameAr else pack.nameEn, maxLines = 1) })
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 92.dp),
+                modifier = Modifier.fillMaxWidth().height(340.dp),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                gridItems(STICKER_PACKS[tab].items, key = { it.id }) { sticker ->
+                    val model = rememberImageModel(sticker.dataUrl)
+                    Box(
+                        Modifier.aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable { onPick(sticker.dataUrl) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (model != null) AsyncImage(model = model, contentDescription = sticker.name, contentScale = ContentScale.Fit, modifier = Modifier.matchParentSize())
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GifSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    var tab by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
+    val arabic = LocalConfiguration.current.locales[0].language == "ar"
+    val list = if (query.isBlank()) GIF_CATEGORIES[tab].items.distinctBy { it.url } else searchGifs(query)
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AbColors.Charcoal2) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+            TextField(
+                value = query,
+                onValueChange = { query = it.take(60) },
+                placeholder = { Text(stringResource(R.string.ui_chat_gif_search), color = AbColors.TextMuted) },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = AbColors.Charcoal3,
+                    unfocusedContainerColor = AbColors.Charcoal3,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            if (query.isBlank()) {
+                PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = Color.Transparent, edgePadding = 12.dp) {
+                    GIF_CATEGORIES.forEachIndexed { i, cat ->
+                        Tab(selected = tab == i, onClick = { tab = i }, text = { Text(if (arabic) cat.labelAr else cat.labelEn, maxLines = 1) })
+                    }
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 120.dp),
+                modifier = Modifier.fillMaxWidth().height(360.dp),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                gridItems(list, key = { it.url }) { gif ->
+                    Box(
+                        Modifier.height(110.dp).clip(RoundedCornerShape(12.dp)).background(AbColors.Charcoal3).clickable { onPick(gif.url) },
+                        contentAlignment = Alignment.BottomStart,
+                    ) {
+                        AsyncImage(model = gif.url, contentDescription = gif.title, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                        Text(
+                            gif.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SendButton(enabled: Boolean, onClick: () -> Unit) {

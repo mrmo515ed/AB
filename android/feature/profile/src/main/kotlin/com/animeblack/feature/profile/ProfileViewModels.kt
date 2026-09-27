@@ -9,10 +9,12 @@ import androidx.paging.cachedIn
 import com.animeblack.core.common.result.AppResult
 import com.animeblack.core.common.util.Validators
 import com.animeblack.core.data.repository.AuthRepository
+import com.animeblack.core.data.repository.LevelBadgeRepository
 import com.animeblack.core.data.repository.PostRepository
 import com.animeblack.core.data.repository.ProfileUpdate
 import com.animeblack.core.data.repository.ReelRepository
 import com.animeblack.core.data.repository.UserRepository
+import com.animeblack.core.model.LevelBadgeCatalog
 import com.animeblack.core.model.Post
 import com.animeblack.core.model.Reel
 import com.animeblack.core.model.User
@@ -69,8 +71,13 @@ class ProfileViewModel @Inject constructor(
     private val postRepository: PostRepository,
     reels: ReelRepository,
     auth: AuthRepository,
+    levelBadges: LevelBadgeRepository,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<ProfileRoute>()
+
+    /** Level badge catalogue (server-defined with web defaults). */
+    val levelCatalog: StateFlow<LevelBadgeCatalog> = levelBadges.observeCatalog()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LevelBadgeCatalog())
     private val myUid = auth.currentUid.orEmpty()
     private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 3)
     val messages: SharedFlow<Int> = _messages.asSharedFlow()

@@ -27,8 +27,9 @@ cd android
 ./gradlew :app:assembleRelease                   # release APK (needs signing, see §4)
 ```
 
-**APK output:** `android/app/build/outputs/apk/debug/app-debug.apk`
-(release: `android/app/build/outputs/apk/release/app-release.apk`).
+**APK output:** `android/app/build/outputs/apk/debug/app-debug.apk` (~30 MB, debuggable)
+and `android/app/build/outputs/apk/release/app-release.apk` (~7 MB with R8; `app-release-unsigned.apk`
+when no signing key is configured).
 
 ### CI
 The existing workflow (`.github/workflows/ci.yml`) runs `npm run build`, whose `build:android:ci`
@@ -158,11 +159,11 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 | Home feed (realtime + pagination), post detail, comments, reactions, polls, saves, shares, edit/delete, drafts, share-target | ✅ |
 | Stories: viewer, create (text/photo/video, close friends), reactions, replies, views | ✅ (archive ❌) |
 | Reels: vertical player, likes, comments, share, create (pick/record), delete | ✅ (advanced studio ❌) |
-| Chat: list, room, requests, new chat, info, wallpaper, mute/pin/archive, block, attachments, voice | ✅ |
+| Chat: list, room, requests, new chat, info, wallpaper, mute/pin/archive, block, attachments, voice, web sticker packs (identical SVG artwork), curated anime GIFs | ✅ |
 | Groups / worlds / guilds: hub, rooms, create, join/leave/request, group admin, channels | ✅ |
 | Profile, edit, followers/following, QR profile card, private accounts, block/report | ✅ |
 | Notifications (+ broadcasts), search (people/posts/groups/anime, trending tags) | ✅ |
-| Wallet (daily reward, transfers, history), levels, workspace notes, saved, favourites/history, reports | ✅ |
+| Wallet (daily reward, transfers, history), levels (rank tiers, admin-defined level badges with web defaults, achievements), workspace notes, saved, favourites/history, reports | ✅ |
 | Anime/manga hub & detail (AniList + Jikan), AI search agent (needs `animeblack.apiBaseUrl`) | ✅ |
 | Games: hub, runner, characters (web catalogue, unlock/upgrade/equip), daily supply, leaderboard | ✅ core loop |
 | Admin: metrics, moderation queue, roles/verification, broadcasts, audit log | ✅ |
@@ -170,10 +171,12 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 
 **Not yet ported (web pages without a native screen yet):** events (`eventsHub/eventDetail/createEvent`),
 news (`createNews/newsDetail/newsView`, `savedArticles`, `readerMode`), internal mail (`gmail/mailView`),
-voice/video calls (WebRTC `calls` collection), sticker packs & GIF picker in chat, story archive,
+voice/video calls (WebRTC `calls` collection), live GIF search (the web used the retired Tenor v1 API; the
+curated catalogue is ported), stickers/GIFs as *post* media, story archive (web-local only),
 advanced reel studio, anime wiki/character/lore pages, extended game systems (shop, chests, inventory,
 missions, achievements, events, transformations, history) and the 15 game-admin pages, server telemetry
-pages (`serverHealth/devCenter/visualControlCenter`), home customizer, archived/hidden posts lists,
+pages (`serverHealth/devCenter/visualControlCenter` — the web's CSS theming tool, `app_visual_config`,
+has no meaning for the native design system), home customizer, archived/hidden posts lists,
 "my replies", activity & otaku stats, 2FA / phone verification / e-mail change. PWA-only pages
 (`installApp/downloadApp/pwaGate`) are not applicable to a native app. The data model for all of these
 is preserved, so they can be added as new feature modules without backend changes.

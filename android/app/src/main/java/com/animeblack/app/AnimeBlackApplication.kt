@@ -12,6 +12,7 @@ import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.svg.SvgDecoder
 import coil3.video.VideoFrameDecoder
 import com.animeblack.core.data.session.AppLifecycleCoordinator
 import com.google.firebase.FirebaseApp
@@ -49,6 +50,7 @@ class AnimeBlackApplication : Application(), Configuration.Provider, SingletonIm
                 add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
                 if (android.os.Build.VERSION.SDK_INT >= 28) add(AnimatedImageDecoder.Factory()) else add(GifDecoder.Factory())
                 add(VideoFrameDecoder.Factory())
+                add(SvgDecoder.Factory())
             }
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.20).build() }
             .diskCache {

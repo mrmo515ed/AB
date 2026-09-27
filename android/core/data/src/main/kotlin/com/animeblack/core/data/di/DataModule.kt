@@ -12,6 +12,7 @@ import com.animeblack.core.data.repository.MediaRepository
 import com.animeblack.core.data.repository.NotificationRepository
 import com.animeblack.core.data.repository.PostRepository
 import com.animeblack.core.data.repository.ReelRepository
+import com.animeblack.core.data.repository.LevelBadgeRepository
 import com.animeblack.core.data.repository.ReportRepository
 import com.animeblack.core.data.repository.SessionRepository
 import com.animeblack.core.data.repository.StoryRepository
@@ -28,6 +29,7 @@ import com.animeblack.core.data.repository.impl.FirestoreGameRepository
 import com.animeblack.core.data.repository.impl.FirestoreNotificationRepository
 import com.animeblack.core.data.repository.impl.FirestorePostRepository
 import com.animeblack.core.data.repository.impl.FirestoreReelRepository
+import com.animeblack.core.data.repository.impl.FirestoreLevelBadgeRepository
 import com.animeblack.core.data.repository.impl.FirestoreReportRepository
 import com.animeblack.core.data.repository.impl.FirestoreStoryRepository
 import com.animeblack.core.data.repository.impl.FirestoreUserRepository
@@ -56,6 +58,7 @@ abstract class DataModule {
     @Binds abstract fun games(impl: FirestoreGameRepository): GameRepository
     @Binds abstract fun admin(impl: FirestoreAdminRepository): AdminRepository
     @Binds abstract fun reports(impl: FirestoreReportRepository): ReportRepository
+    @Binds abstract fun levelBadges(impl: FirestoreLevelBadgeRepository): LevelBadgeRepository
     @Binds abstract fun workspace(impl: FirestoreWorkspaceRepository): WorkspaceRepository
     @Binds abstract fun sessions(impl: SessionManager): SessionRepository
     @Binds abstract fun sync(impl: DefaultSyncRepository): SyncRepository

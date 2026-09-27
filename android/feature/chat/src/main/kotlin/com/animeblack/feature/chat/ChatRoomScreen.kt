@@ -224,6 +224,8 @@ fun ChatRoomScreen(
                     onPickFile = if (state.sendsRequest) null else ({ filePicker.launch(arrayOf("*/*")) }),
                     onCamera = if (state.sendsRequest) null else actions.openCamera,
                     onVoiceRecorded = if (state.sendsRequest) null else viewModel::sendVoice,
+                    onSticker = if (state.sendsRequest) null else viewModel::sendSticker,
+                    onGif = if (state.sendsRequest) null else viewModel::sendGif,
                     enabled = state.canSend,
                     disabledHint = notice?.let { stringResource(it) },
                     sending = composer.sending,

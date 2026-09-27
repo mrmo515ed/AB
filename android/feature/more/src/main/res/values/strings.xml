@@ -74,4 +74,17 @@
     <string name="report_r_impersonation">Impersonation</string>
     <string name="report_r_other">Something else</string>
     <string name="userposts_title">Posts</string>
+    <string name="levels_rank">Rank: %1$s</string>
+    <string name="levels_next_rank">Next rank: %1$s at level %2$d</string>
+    <string name="levels_road">Level badges</string>
+    <string name="levels_unlocked">Unlocked</string>
+    <string name="levels_reach">Reach level %1$d</string>
+    <string name="levels_current_badge">Your level badge</string>
+    <string name="levels_achievements">Achievements</string>
+    <string name="levels_earned">Earned</string>
+    <string name="levels_rarity_common">Common</string>
+    <string name="levels_rarity_rare">Rare</string>
+    <string name="levels_rarity_epic">Epic</string>
+    <string name="levels_rarity_legendary">Legendary</string>
+    <string name="levels_max_rank">Top rank reached</string>
 </resources>

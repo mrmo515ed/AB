@@ -48,7 +48,7 @@ function escProp(s) {
 }
 /** GitHub caps annotations per step, so related lines are grouped into a few large messages. */
 function annotate(level, title, message) {
-  const max = 60000;
+  const max = 3500;
   const text = String(message);
   const chunks = [];
   for (let i = 0; i < text.length; i += max) chunks.push(text.slice(i, i + max));
@@ -293,54 +293,57 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Boots an emulator, installs + launches the APK and reports what happened. */
 async function smokeTest(apkPath) {
   const t0 = Date.now();
-  const lines = [];
+  const summary = [];
   const adb = `${androidHome}/platform-tools/adb`;
   const tools = fs.existsSync(`${androidHome}/cmdline-tools/latest/bin`) ? `${androidHome}/cmdline-tools/latest/bin` : sh(`ls -d ${androidHome}/cmdline-tools/*/bin | tail -1`);
   sh(`echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules && sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm`);
-  lines.push(`kvm: ${sh("ls -l /dev/kvm")}`);
+  summary.push(`kvm: ${fs.existsSync("/dev/kvm") ? "available" : "MISSING"}`);
   const img = "system-images;android-35;google_apis;x86_64";
-  lines.push(sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" > /tmp/sdk.log 2>&1; tail -3 /tmp/sdk.log`, { timeout: 20 * 60 * 1000 }));
-  lines.push(sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" -d pixel_6 --force 2>&1 | tail -2`));
+  const install = sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" 2>&1 | tr '\\r' '\\n' | grep -v '^\\s*\\[' | tail -2`, { timeout: 20 * 60 * 1000 });
+  summary.push(`sdk: ${install.replace(/\s+/g, " ").slice(0, 200)}`);
+  sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" -d pixel_6 --force`);
   const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-memory", "4096"], { detached: true, stdio: "ignore" });
   emu.unref();
-  sh(`${adb} wait-for-device`, { timeout: 8 * 60 * 1000 });
+  sh(`timeout 480 ${adb} wait-for-device`, { timeout: 9 * 60 * 1000 });
   let booted = false;
   for (let i = 0; i < 120 && !booted; i++) {
     booted = sh(`${adb} shell getprop sys.boot_completed`).trim() === "1";
     if (!booted) await sleep(5000);
   }
-  lines.push(`booted: ${booted} after ${Math.round((Date.now() - t0) / 1000)}s`);
-  if (!booted) return { ok: false, text: lines.join("\n") };
+  summary.push(`booted: ${booted} (${Math.round((Date.now() - t0) / 1000)}s)`);
+  if (!booted) return { ok: false, summary: summary.join("\n"), crash: "", appLog: "" };
   sh(`${adb} shell settings put global window_animation_scale 0; ${adb} shell settings put global transition_animation_scale 0; ${adb} shell settings put global animator_duration_scale 0`);
-  lines.push(`install: ${sh(`${adb} install -r -g ${JSON.stringify(apkPath)} 2>&1 | tail -2`)}`);
-  sh(`${adb} logcat -c`);
+  summary.push(`install: ${sh(`${adb} install -r -g ${JSON.stringify(apkPath)} 2>&1 | tail -1`)}`);
+  sh(`${adb} logcat -c; ${adb} logcat -b crash -c`);
   const uiTexts = () => {
     sh(`${adb} shell uiautomator dump /sdcard/ui.xml`);
     const xml = sh(`${adb} shell cat /sdcard/ui.xml`);
     const texts = [...xml.matchAll(/(?:text|content-desc)="([^"]+)"/g)].map((m) => m[1]).filter((x) => x.trim());
-    return [...new Set(texts)].slice(0, 60).join(" | ");
+    return [...new Set(texts)].slice(0, 40).join(" | ").slice(0, 900);
   };
-  lines.push(`launch: ${sh(`${adb} shell am start -W -n com.animeblack.app/.MainActivity 2>&1 | tail -4`)}`);
+  const pid = () => sh(`${adb} shell pidof com.animeblack.app`) || "(not running)";
+  summary.push(`launch: ${sh(`${adb} shell am start -W -n com.animeblack.app/.MainActivity 2>&1 | grep -E 'Status|TotalTime|Error' | tr '\\n' ' '`)}`);
   await sleep(25000);
-  lines.push(`pid after launch: ${sh(`${adb} shell pidof com.animeblack.app`) || "(not running)"}`);
-  lines.push(`ui (en): ${uiTexts()}`);
-  // RTL: switch the app to Arabic via the per-app locale service (Android 13+) and relaunch.
+  summary.push(`pid after launch: ${pid()}`);
+  summary.push(`ui (default locale): ${uiTexts()}`);
   sh(`${adb} shell cmd locale set-app-locales com.animeblack.app --locales ar`);
   await sleep(4000);
   sh(`${adb} shell am force-stop com.animeblack.app; ${adb} shell am start -W -n com.animeblack.app/.MainActivity`);
   await sleep(15000);
-  lines.push(`ui (ar): ${uiTexts()}`);
-  // Deep link while signed out must stay on the sign-in screen without crashing.
+  summary.push(`pid after Arabic relaunch: ${pid()}`);
+  summary.push(`ui (ar): ${uiTexts()}`);
   sh(`${adb} shell am start -W -a android.intent.action.VIEW -d "animeblack://post/p_test" com.animeblack.app`);
   await sleep(8000);
-  lines.push(`pid after deep link: ${sh(`${adb} shell pidof com.animeblack.app`) || "(not running)"}`);
-  const crash = sh(`${adb} logcat -d -b crash`);
-  const fatal = sh(`${adb} logcat -d AndroidRuntime:E *:S | tail -80`);
-  const appLog = sh(`${adb} logcat -d --pid=$(${adb} shell pidof com.animeblack.app) *:W | tail -60`);
-  lines.push("--- crash buffer ---", crash.slice(-8000) || "(empty)", "--- AndroidRuntime ---", fatal.slice(-8000) || "(empty)", "--- app warnings ---", appLog.slice(-6000));
+  summary.push(`pid after deep link: ${pid()}`);
+  const crashAll = sh(`${adb} logcat -d -b crash`) + "\n" + sh(`${adb} logcat -d AndroidRuntime:E *:S`);
+  // Only our process counts (system apps on the image may crash on their own).
+  const ours = crashAll.split(/(?=FATAL EXCEPTION)/).filter((b) => b.includes("com.animeblack.app")).join("\n");
+  const appPid = sh(`${adb} shell pidof com.animeblack.app`);
+  const appLog = appPid ? sh(`${adb} logcat -d --pid=${appPid} *:W | tail -40`) : "";
   sh(`${adb} emu kill`);
-  const ok = !/FATAL EXCEPTION/.test(crash + fatal);
-  return { ok, text: lines.join("\n") };
+  const ok = !ours.trim() && appPid !== "";
+  summary.push(`app crash detected: ${ours.trim() ? "YES" : "no"}`);
+  return { ok, summary: summary.join("\n"), crash: ours.slice(0, 7000), appLog: appLog.slice(-3400) };
 }
 
 async function main() {
@@ -405,8 +408,10 @@ async function main() {
       const debugApk = apks.find((a) => a.kind === "debug");
       if (debugApk) {
         const smoke = await smokeTest(debugApk.src);
-        annotate(smoke.ok ? "notice" : "error", "android-smoke", smoke.text);
-        report.push("## Emulator smoke test", "```", smoke.text.slice(0, 60000), "```", "");
+        annotate(smoke.ok ? "notice" : "error", "android-smoke", smoke.summary);
+        if (smoke.crash) annotate("error", "android-smoke crash", smoke.crash);
+        if (smoke.appLog) annotate("notice", "android-smoke app log", smoke.appLog);
+        report.push("## Emulator smoke test", "```", smoke.summary, smoke.crash, smoke.appLog, "```", "");
       } else {
         annotate("warning", "android-smoke", "No debug APK to test.");
       }

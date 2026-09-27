@@ -74,4 +74,17 @@
     <string name="report_r_impersonation">انتحال شخصية</string>
     <string name="report_r_other">سبب آخر</string>
     <string name="userposts_title">المنشورات</string>
+    <string name="levels_rank">الرتبة: %1$s</string>
+    <string name="levels_next_rank">الرتبة التالية: %1$s عند المستوى %2$d</string>
+    <string name="levels_road">شارات المستويات</string>
+    <string name="levels_unlocked">مفتوحة</string>
+    <string name="levels_reach">اوصل للمستوى %1$d</string>
+    <string name="levels_current_badge">شارة مستواك</string>
+    <string name="levels_achievements">الإنجازات</string>
+    <string name="levels_earned">مكتسبة</string>
+    <string name="levels_rarity_common">عادية</string>
+    <string name="levels_rarity_rare">نادرة</string>
+    <string name="levels_rarity_epic">ملحمية</string>
+    <string name="levels_rarity_legendary">أسطورية</string>
+    <string name="levels_max_rank">وصلت لأعلى رتبة</string>
 </resources>

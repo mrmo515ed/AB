@@ -399,6 +399,24 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
+    fun sendSticker(dataUrl: String) {
+        val s = state.value
+        if (s.partnerId.isBlank() || !s.canSend || s.sendsRequest) return
+        viewModelScope.launch {
+            val r = chats.send(chatId, s.partnerId, OutgoingMessage(text = "", stickerUrl = dataUrl))
+            if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
+        }
+    }
+
+    fun sendGif(url: String) {
+        val s = state.value
+        if (s.partnerId.isBlank() || !s.canSend || s.sendsRequest) return
+        viewModelScope.launch {
+            val r = chats.send(chatId, s.partnerId, OutgoingMessage(text = "", gifUrl = url))
+            if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
+        }
+    }
+
     fun react(message: ChatMessage, key: String?) = viewModelScope.launch {
         val r = chats.react(chatId, message.id, key)
         if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())

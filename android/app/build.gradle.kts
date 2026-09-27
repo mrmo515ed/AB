@@ -158,6 +158,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.gif)
     implementation(libs.coil.video)
+    // SVG artwork from the web (level badges, chat stickers are SVG data URLs).
+    implementation(libs.coil.svg)
     implementation(libs.okhttp)
 
     implementation(platform(libs.firebase.bom))

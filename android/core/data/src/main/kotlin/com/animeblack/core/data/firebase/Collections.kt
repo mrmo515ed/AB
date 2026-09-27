@@ -24,6 +24,7 @@ object Collections {
     const val GAME_PROFILES = "game_profiles"
     const val AUDIT_LOGS = "audit_logs"
     const val LEVEL_BADGES = "level_badges"
+    const val LEVEL_MAPPINGS = "level_mappings"
     const val ECONOMY_TRANSACTIONS = "economy_transactions"
     const val TEST = "test"
 }

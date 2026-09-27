@@ -11,11 +11,13 @@ import com.animeblack.core.data.remote.FeatureFlags
 import com.animeblack.core.data.remote.Flags
 import com.animeblack.core.data.repository.AnimeRepository
 import com.animeblack.core.data.repository.EconomyRepository
+import com.animeblack.core.data.repository.LevelBadgeRepository
 import com.animeblack.core.data.repository.PostRepository
 import com.animeblack.core.data.repository.ReportRepository
 import com.animeblack.core.data.repository.UserRepository
 import com.animeblack.core.data.repository.WorkspaceRepository
 import com.animeblack.core.model.EconomyTransaction
+import com.animeblack.core.model.LevelBadgeCatalog
 import com.animeblack.core.model.Post
 import com.animeblack.core.model.Thought
 import com.animeblack.core.model.User
@@ -148,9 +150,12 @@ class EconomyViewModel @Inject constructor(
 
 // ============================================================================ Levels
 
+data class LevelsUiState(val me: User? = null, val catalog: LevelBadgeCatalog = LevelBadgeCatalog())
+
 @HiltViewModel
-class LevelsViewModel @Inject constructor(users: UserRepository) : ViewModel() {
-    val me: StateFlow<User?> = users.observeMe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+class LevelsViewModel @Inject constructor(users: UserRepository, levelBadges: LevelBadgeRepository) : ViewModel() {
+    val state: StateFlow<LevelsUiState> = combine(users.observeMe(), levelBadges.observeCatalog()) { me, catalog -> LevelsUiState(me, catalog) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LevelsUiState())
 }
 
 // ============================================================================ Workspace

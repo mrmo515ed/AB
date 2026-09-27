@@ -83,4 +83,7 @@
     <string name="ui_chat_remove_attachment">Remove attachment</string>
     <string name="ui_chat_typing">typing…</string>
     <string name="ui_chat_scroll_latest">Jump to latest</string>
+    <string name="ui_chat_stickers">Stickers</string>
+    <string name="ui_chat_gifs">GIFs</string>
+    <string name="ui_chat_gif_search">Search GIFs</string>
 </resources>
