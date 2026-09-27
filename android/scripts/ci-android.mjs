@@ -298,20 +298,27 @@ async function smokeTest(apkPath) {
   const tools = fs.existsSync(`${androidHome}/cmdline-tools/latest/bin`) ? `${androidHome}/cmdline-tools/latest/bin` : sh(`ls -d ${androidHome}/cmdline-tools/*/bin | tail -1`);
   sh(`echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules && sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm`);
   summary.push(`kvm: ${fs.existsSync("/dev/kvm") ? "available" : "MISSING"}`);
-  const img = "system-images;android-35;google_apis;x86_64";
-  const install = sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" 2>&1 | tr '\\r' '\\n' | grep -v '^\\s*\\[' | tail -2`, { timeout: 20 * 60 * 1000 });
-  summary.push(`sdk: ${install.replace(/\s+/g, " ").slice(0, 200)}`);
-  sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" -d pixel_6 --force`);
-  const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-memory", "4096"], { detached: true, stdio: "ignore" });
+  const img = "system-images;android-34;google_apis;x86_64";
+  const install = sh(`yes | ${tools}/sdkmanager --install "emulator" "platform-tools" "${img}" > /tmp/sdk.log 2>&1; echo "exit=$?"; tr '\\r' '\\n' < /tmp/sdk.log | grep -viE '^\\s*\\[|^\\s*$' | tail -3`, { timeout: 20 * 60 * 1000 });
+  summary.push(`sdk: ${install.replace(/\s+/g, " ").slice(0, 300)}`);
+  summary.push(`image: ${sh(`ls ${androidHome}/system-images/android-34/google_apis/x86_64 2>&1 | head -5 | tr '\\n' ' '`)}`);
+  summary.push(`avd: ${sh(`echo no | ${tools}/avdmanager create avd -n smoke -k "${img}" --force 2>&1 | tail -2 | tr '\\n' ' '`)}`);
+  summary.push(`avds: ${sh(`${androidHome}/emulator/emulator -list-avds 2>&1 | tr '\\n' ' '`)}`);
+  const logFd = fs.openSync("/tmp/emulator.log", "w");
+  const emu = spawn(`${androidHome}/emulator/emulator`, ["-avd", "smoke", "-no-window", "-no-audio", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-no-snapshot", "-camera-back", "none", "-accel", "on", "-memory", "3072"], { detached: true, stdio: ["ignore", logFd, logFd] });
   emu.unref();
-  sh(`timeout 480 ${adb} wait-for-device`, { timeout: 9 * 60 * 1000 });
+  sh(`timeout 300 ${adb} wait-for-device`, { timeout: 6 * 60 * 1000 });
   let booted = false;
-  for (let i = 0; i < 120 && !booted; i++) {
+  for (let i = 0; i < 72 && !booted; i++) {
     booted = sh(`${adb} shell getprop sys.boot_completed`).trim() === "1";
     if (!booted) await sleep(5000);
   }
   summary.push(`booted: ${booted} (${Math.round((Date.now() - t0) / 1000)}s)`);
-  if (!booted) return { ok: false, summary: summary.join("\n"), crash: "", appLog: "" };
+  if (!booted) {
+    summary.push(`emulator log: ${sh("tail -25 /tmp/emulator.log").slice(-1800)}`);
+    sh(`${adb} emu kill`);
+    return { ok: false, summary: summary.join("\n"), crash: "", appLog: "" };
+  }
   sh(`${adb} shell settings put global window_animation_scale 0; ${adb} shell settings put global transition_animation_scale 0; ${adb} shell settings put global animator_duration_scale 0`);
   summary.push(`install: ${sh(`${adb} install -r -g ${JSON.stringify(apkPath)} 2>&1 | tail -1`)}`);
   sh(`${adb} logcat -c; ${adb} logcat -b crash -c`);
