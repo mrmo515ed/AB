@@ -291,7 +291,7 @@ function collectTestResults() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Boots an emulator, installs + launches the APK and reports what happened. */
-async function smokeTest(apkPath) {
+async function smokeTest(apkPath, releaseApk = null) {
   const t0 = Date.now();
   const summary = [];
   const adb = `${androidHome}/platform-tools/adb`;
@@ -346,6 +346,19 @@ async function smokeTest(apkPath) {
   sh(`${adb} shell am start -W -a android.intent.action.VIEW -d "animeblack://post/p_test" com.animeblack.app`);
   await sleep(8000);
   summary.push(`pid after deep link: ${pid()}`);
+  if (releaseApk) {
+    // R8-minified build: sign a throw-away copy with the debug key (CI only) and launch it.
+    const bt = sh(`ls -d ${androidHome}/build-tools/* | sort -V | tail -1`);
+    const signed = "/tmp/app-release-smoke.apk";
+    const ks = path.join(ANDROID_DIR, "app", "debug.keystore");
+    summary.push(`release sign: ${sh(`${bt}/zipalign -f -p 4 ${JSON.stringify(releaseApk)} /tmp/aligned.apk && ${bt}/apksigner sign --ks ${ks} --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out ${signed} /tmp/aligned.apk && echo signed`).slice(-200)}`);
+    sh(`${adb} uninstall com.animeblack.app`);
+    summary.push(`release install: ${sh(`${adb} install -r -g ${signed} 2>&1 | tail -1`)}`);
+    sh(`${adb} shell am start -W -n com.animeblack.app/.MainActivity`);
+    await sleep(20000);
+    summary.push(`release pid: ${pid()}`);
+    summary.push(`release ui: ${uiTexts()}`);
+  }
   const crashAll = sh(`${adb} logcat -d -b crash`) + "\n" + sh(`${adb} logcat -d AndroidRuntime:E *:S`);
   // Only our process counts (system apps on the image may crash on their own).
   const ours = crashAll.split(/(?=FATAL EXCEPTION)/).filter((b) => b.includes("com.animeblack.app")).join("\n");
@@ -418,7 +431,8 @@ async function main() {
     if (msg.includes("[android-smoke]")) {
       const debugApk = apks.find((a) => a.kind === "debug");
       if (debugApk) {
-        const smoke = await smokeTest(debugApk.src);
+        const releaseApk = apks.find((a) => a.kind === "release");
+        const smoke = await smokeTest(debugApk.src, releaseApk ? releaseApk.src : null);
         annotate(smoke.ok ? "notice" : "error", "android-smoke", smoke.summary);
         if (smoke.crash) annotate("error", "android-smoke crash", smoke.crash);
         if (smoke.appLog) annotate("notice", "android-smoke app log", smoke.appLog);

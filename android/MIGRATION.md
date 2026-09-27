@@ -40,6 +40,13 @@ the **`dist`** artifact of each run. Commit-message tags: `[android-release]` (a
 (toolchain/versions report), `[android-report]`. A standalone workflow is provided in
 `android/ci/android-apk.yml` (copy it to `.github/workflows/` to use it).
 
+**Automated verification in CI:** unit tests (41 across model, navigation, validators, chat
+list building, web-format mappers, level badges, stickers/data URLs, notification routing, game
+simulation) and an optional `[android-smoke]` emulator run that installs the APK, launches it,
+relaunches it in Arabic (RTL), opens a deep link while signed out, and fails on any crash of the
+app process (with `[android-release]` it also launches the R8 release build signed with the debug
+key). Last result: login screen rendered in English and Arabic, no crash.
+
 Offline helpers (no SDK needed): `python3 android/scripts/kt_lint.py android` (nested comments,
 unterminated strings, bracket balance) and `python3 android/scripts/res_lint.py` (string resources:
 XML validity, apostrophes, placeholders, en/ar parity).
@@ -65,6 +72,13 @@ XML validity, apostrophes, placeholders, en/ar parity).
   `android_min_supported_version_code`, `feature_games_enabled`, `feature_ai_agent_enabled`,
   `announcement_banner` (safe defaults in-app; the app never blocks on a fetch).
 * **Crashlytics / Performance / Analytics** are wired; users can opt out in Settings → Diagnostics.
+
+### What works without `google-services.json` (verified on an emulator)
+The fallback uses the **web** app id. Firebase Auth/Firestore/Storage/Functions talk to the same
+project, but Firebase **Analytics, Crashlytics and Sessions disable themselves** ("Invalid
+google_app_id … web:…" in Logcat) and App Check cannot attest the app. If the web API key is
+restricted to HTTP referrers in Google Cloud, Android requests are rejected as well. Registering the
+Android app (§3) and adding its `google-services.json` fixes all of these.
 
 ## 3. Google Sign-In (Credential Manager)
 
