@@ -64,4 +64,6 @@
     <string name="post_menu_report">الإبلاغ عن المنشور</string>
     <string name="camera_photo">صورة</string>
     <string name="camera_video">فيديو</string>
+    <string name="compose_sticker">ملصق</string>
+    <string name="compose_gif">صورة متحركة</string>
 </resources>

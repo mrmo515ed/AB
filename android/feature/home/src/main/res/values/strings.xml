@@ -64,4 +64,6 @@
     <string name="post_menu_report">Report post</string>
     <string name="camera_photo">Photo</string>
     <string name="camera_video">Video</string>
+    <string name="compose_sticker">Sticker</string>
+    <string name="compose_gif">GIF</string>
 </resources>

@@ -77,7 +77,13 @@ private fun MediaTile(item: MediaItem, onOpen: (MediaItem) -> Unit, modifier: Mo
                 AbIcon(AbIcons.PlayArrowFilled, contentDescription = null, tint = Color.White, size = 26.dp)
             }
         } else {
-            AsyncImage(model = item.src, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            // data: URLs (web stickers / legacy inline images) are decoded by rememberImageModel.
+            AsyncImage(
+                model = rememberImageModel(item.src),
+                contentDescription = item.name.ifBlank { null },
+                contentScale = if (item.type == "sticker") ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

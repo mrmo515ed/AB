@@ -8,6 +8,7 @@ import com.animeblack.core.navigation.CreatePostRoute
 import com.animeblack.core.navigation.EditProfileRoute
 import com.animeblack.core.navigation.FollowListRoute
 import com.animeblack.core.navigation.MediaViewerRoute
+import com.animeblack.core.navigation.canOpenInViewer
 import com.animeblack.core.navigation.PostDetailRoute
 import com.animeblack.core.navigation.ProfileRoute
 import com.animeblack.core.navigation.QrCardRoute
@@ -27,7 +28,7 @@ fun NavGraphBuilder.profileGraph(navController: NavController, openMention: (Str
                 openPost = { id, focus -> navController.navigate(PostDetailRoute(id, focus)) },
                 openProfile = { navController.navigate(ProfileRoute(it)) },
                 openReel = { navController.navigate(ReelViewerRoute(it)) },
-                openMedia = { item -> navController.navigate(MediaViewerRoute(item.src, item.type)) },
+                openMedia = { item -> if (canOpenInViewer(item.src)) navController.navigate(MediaViewerRoute(item.src, item.type)) },
                 openSearch = { navController.navigate(SearchRoute(it)) },
                 openMention = openMention,
                 report = { type, id -> navController.navigate(ReportRoute(type, id)) },

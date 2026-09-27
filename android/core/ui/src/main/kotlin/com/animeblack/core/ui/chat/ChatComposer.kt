@@ -258,13 +258,13 @@ fun ChatComposer(
         }
     }
     if (stickers && onSticker != null) {
-        StickerSheet(onDismiss = { stickers = false }, onPick = { url ->
+        StickerPickerSheet(onDismiss = { stickers = false }, onPick = { url ->
             stickers = false
             onSticker(url)
         })
     }
     if (gifs && onGif != null) {
-        GifSheet(onDismiss = { gifs = false }, onPick = { url ->
+        GifPickerSheet(onDismiss = { gifs = false }, onPick = { url ->
             gifs = false
             onGif(url)
         })
@@ -274,7 +274,8 @@ fun ChatComposer(
 const val MAX_MESSAGE_LENGTH = 4_000
 
 @Composable
-private fun StickerSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+/** Web sticker packs picker (returns the sticker data URL). */
+fun StickerPickerSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var tab by remember { mutableStateOf(0) }
     val arabic = LocalConfiguration.current.locales[0].language == "ar"
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AbColors.Charcoal2) {
@@ -306,7 +307,8 @@ private fun StickerSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun GifSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+/** Curated anime GIF picker (returns the GIF URL). */
+fun GifPickerSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var tab by remember { mutableStateOf(0) }
     var query by remember { mutableStateOf("") }
     val arabic = LocalConfiguration.current.locales[0].language == "ar"

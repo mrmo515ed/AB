@@ -68,6 +68,7 @@ import com.animeblack.core.model.User
 import com.animeblack.core.navigation.AnimeDetailRoute
 import com.animeblack.core.navigation.GroupRoomRoute
 import com.animeblack.core.navigation.MediaViewerRoute
+import com.animeblack.core.navigation.canOpenInViewer
 import com.animeblack.core.navigation.PostDetailRoute
 import com.animeblack.core.navigation.ProfileRoute
 import com.animeblack.core.navigation.SearchAgentRoute
@@ -177,7 +178,7 @@ fun SearchScreen(onBack: () -> Unit, navigate: (Any) -> Unit, openMention: (Stri
         onComment = { navigate(PostDetailRoute(it.id, true)) },
         onSave = { p, s -> viewModel.save(p, s) },
         onVote = { p, o -> viewModel.vote(p, o) },
-        onMedia = { navigate(MediaViewerRoute(it.src, it.type)) },
+        onMedia = { if (canOpenInViewer(it.src)) navigate(MediaViewerRoute(it.src, it.type)) },
         onHashtag = { viewModel.query.value = "#$it" },
         onMention = openMention,
         onUrl = { context.openExternalUrl(it) },

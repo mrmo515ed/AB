@@ -247,6 +247,19 @@ class FirestorePostRepository @Inject constructor(
 
     private suspend fun prepareFiles(uid: String, draft: PostDraft): List<UploadFile> =
         draft.attachments.take(MAX_ATTACHMENTS).map { item ->
+            // Stickers (SVG data URLs) and curated GIFs are already hosted: no upload needed,
+            // the outbox processor keeps a preset downloadUrl as-is.
+            if (item.uri.startsWith("https://") || item.uri.startsWith("data:")) {
+                return@map UploadFile(
+                    localUri = item.uri,
+                    mimeType = item.mimeType,
+                    type = item.type,
+                    name = item.name,
+                    size = 0,
+                    storagePath = "",
+                    downloadUrl = item.uri,
+                )
+            }
             val prepared = preparer.prepare(item)
             val media = (prepared as? AppResult.Success)?.data ?: throw AppErrorException(prepared.errorOrNull() ?: AppError.Unknown())
             if (media.sizeBytes >= MAX_POST_MEDIA_BYTES) throw AppErrorException(AppError.Validation("media", "too-large"))

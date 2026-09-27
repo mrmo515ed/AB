@@ -98,6 +98,7 @@ import com.animeblack.core.navigation.FavoritesRoute
 import com.animeblack.core.navigation.GamesHubRoute
 import com.animeblack.core.navigation.LevelsRoute
 import com.animeblack.core.navigation.MediaViewerRoute
+import com.animeblack.core.navigation.canOpenInViewer
 import com.animeblack.core.navigation.NotificationsRoute
 import com.animeblack.core.navigation.PostDetailRoute
 import com.animeblack.core.navigation.ProfileRoute
@@ -541,7 +542,7 @@ private fun postActions(navigate: (Any) -> Unit, openMention: (String) -> Unit, 
         onComment = { navigate(PostDetailRoute(it.id, true)) },
         onSave = save,
         onVote = vote,
-        onMedia = { navigate(MediaViewerRoute(it.src, it.type)) },
+        onMedia = { if (canOpenInViewer(it.src)) navigate(MediaViewerRoute(it.src, it.type)) },
         onHashtag = { navigate(SearchRoute("#$it")) },
         onMention = openMention,
         onUrl = { context.openExternalUrl(it) },

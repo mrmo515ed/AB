@@ -156,7 +156,7 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 | Area | Native status |
 | --- | --- |
 | Auth: e-mail, Google, reset, verification, complete profile, account switcher, delete account | ✅ |
-| Home feed (realtime + pagination), post detail, comments, reactions, polls, saves, shares, edit/delete, drafts, share-target | ✅ |
+| Home feed (realtime + pagination), post detail, comments, reactions, polls, saves, shares, edit/delete, drafts, share-target, stickers & GIFs as post media | ✅ |
 | Stories: viewer, create (text/photo/video, close friends), reactions, replies, views | ✅ (archive ❌) |
 | Reels: vertical player, likes, comments, share, create (pick/record), delete | ✅ (advanced studio ❌) |
 | Chat: list, room, requests, new chat, info, wallpaper, mute/pin/archive, block, attachments, voice, web sticker packs (identical SVG artwork), curated anime GIFs | ✅ |
@@ -171,15 +171,23 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 
 **Not yet ported (web pages without a native screen yet):** events (`eventsHub/eventDetail/createEvent`),
 news (`createNews/newsDetail/newsView`, `savedArticles`, `readerMode`), internal mail (`gmail/mailView`),
-voice/video calls (WebRTC `calls` collection), live GIF search (the web used the retired Tenor v1 API; the
-curated catalogue is ported), stickers/GIFs as *post* media, story archive (web-local only),
+live GIF search (the web used the retired Tenor v1 API; the curated catalogue is ported), story archive
+(web-local only),
 advanced reel studio, anime wiki/character/lore pages, extended game systems (shop, chests, inventory,
 missions, achievements, events, transformations, history) and the 15 game-admin pages, server telemetry
 pages (`serverHealth/devCenter/visualControlCenter` — the web's CSS theming tool, `app_visual_config`,
 has no meaning for the native design system), home customizer, archived/hidden posts lists,
-"my replies", activity & otaku stats, 2FA / phone verification / e-mail change. PWA-only pages
+"my replies", activity & otaku stats. PWA-only pages
 (`installApp/downloadApp/pwaGate`) are not applicable to a native app. The data model for all of these
 is preserved, so they can be added as new feature modules without backend changes.
+
+*Not a gap:* the `calls` collection appears only in the security rules and the `cleanupStaleCalls`
+function; no client (the web included) implements voice/video calls, so there is nothing to port.
+Events, news and internal mail on the web live only in browser storage (no Firestore collection), so a
+native port could not share data with web users; they are left out on purpose rather than faked. The web
+pages for 2FA (hard-coded demo secret), phone verification (sets a local flag, sends no SMS) and e-mail
+change (no Firebase call) are UI mock-ups, so they were not reproduced as fake native screens; real
+versions need Firebase Identity Platform MFA / phone auth / `verifyBeforeUpdateEmail`.
 
 ## 8. Libraries (all pinned in `gradle/libs.versions.toml`)
 Compose BOM 2026.09.00 (Material 3), AndroidX core 1.19.1, activity 1.13.0, lifecycle 2.11.0,

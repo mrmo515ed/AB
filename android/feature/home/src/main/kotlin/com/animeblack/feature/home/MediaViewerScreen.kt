@@ -22,6 +22,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.animeblack.core.ui.rememberImageModel
 import com.animeblack.core.designsystem.component.CircleAction
 import com.animeblack.core.designsystem.icon.AbIcons
 import com.animeblack.core.ui.VideoPlayer
@@ -36,7 +37,7 @@ fun MediaViewerScreen(url: String, type: String, onClose: () -> Unit) {
             VideoPlayer(url = url, modifier = Modifier.fillMaxSize(), showControls = true, loop = false)
         } else {
             AsyncImage(
-                model = url,
+                model = rememberImageModel(url),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier

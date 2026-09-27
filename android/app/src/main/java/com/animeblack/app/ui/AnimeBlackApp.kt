@@ -83,6 +83,7 @@ import com.animeblack.core.navigation.CreatePostRoute
 import com.animeblack.core.navigation.CreateStoryRoute
 import com.animeblack.core.navigation.HomeRoute
 import com.animeblack.core.navigation.MediaViewerRoute
+import com.animeblack.core.navigation.canOpenInViewer
 import com.animeblack.core.navigation.MoreRoute
 import com.animeblack.core.navigation.NotificationsRoute
 import com.animeblack.core.navigation.PostDetailRoute
@@ -308,7 +309,7 @@ private fun AppNavHost(navController: NavHostController, viewModel: MainViewMode
         createPost = { editId -> navController.navigate(CreatePostRoute(editPostId = editId)) },
         openSearch = { q -> navController.navigate(SearchRoute(q)) },
         openNotifications = { navController.navigate(NotificationsRoute) },
-        openMedia = { item -> navController.navigate(MediaViewerRoute(item.src, item.type)) },
+        openMedia = { item -> if (canOpenInViewer(item.src)) navController.navigate(MediaViewerRoute(item.src, item.type)) },
         report = { type, id -> navController.navigate(ReportRoute(type, id)) },
         openUrl = { url -> context.openExternalUrl(url) },
         openMention = openMention,

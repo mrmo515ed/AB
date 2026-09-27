@@ -77,6 +77,10 @@ import com.animeblack.core.ui.shareLink
 import com.animeblack.core.ui.shareText
 import com.animeblack.core.ui.copyToClipboard
 import com.animeblack.core.ui.localMediaFor
+import androidx.compose.foundation.horizontalScroll
+import com.animeblack.core.ui.rememberImageModel
+import com.animeblack.core.ui.chat.StickerPickerSheet
+import com.animeblack.core.ui.chat.GifPickerSheet
 
 @Composable
 fun PostDetailScreen(navigator: HomeNavigator, onBack: () -> Unit, viewModel: PostDetailViewModel = hiltViewModel()) {
@@ -233,6 +237,8 @@ fun CreatePostScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         viewModel.addMedia(uris.map { uri -> localMediaFor(context, uri) })
     }
+    var stickerSheet by remember { mutableStateOf(false) }
+    var gifSheet by remember { mutableStateOf(false) }
     LaunchedEffect(capturedMedia) {
         if (capturedMedia != null) {
             viewModel.addMedia(listOf(capturedMedia))
@@ -283,7 +289,12 @@ fun CreatePostScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.attachments, key = { it.uri }) { media ->
                         Box(Modifier.size(110.dp).clip(RoundedCornerShape(14.dp)).background(AbTheme.colors.surfaceHigh)) {
-                            AsyncImage(model = media.uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            AsyncImage(
+                                model = rememberImageModel(media.uri),
+                                contentDescription = null,
+                                contentScale = if (media.type == "sticker") ContentScale.Fit else ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
                             if (media.type == "video") AbIcon(AbIcons.PlayArrowFilled, null, tint = Color.White, modifier = Modifier.align(Alignment.Center))
                             Box(
                                 Modifier.align(Alignment.TopEnd).padding(4.dp).size(26.dp).clip(CircleShape).background(Color(0xAA000000)).clickable { viewModel.removeMedia(media.uri) },
@@ -294,7 +305,7 @@ fun CreatePostScreen(
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = false,
                     onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
@@ -302,6 +313,8 @@ fun CreatePostScreen(
                     leadingIcon = { AbIcon(AbIcons.PhotoLibrary, null, tint = AbColors.Emerald, size = 18.dp) },
                 )
                 FilterChip(selected = false, onClick = onOpenCamera, label = { Text(stringResource(R.string.compose_camera)) }, leadingIcon = { AbIcon(AbIcons.PhotoCamera, null, tint = AbColors.Cyan, size = 18.dp) })
+                FilterChip(selected = false, onClick = { stickerSheet = true }, label = { Text(stringResource(R.string.compose_sticker)) }, leadingIcon = { AbIcon(AbIcons.Mood, null, tint = AbColors.Gold, size = 18.dp) })
+                FilterChip(selected = false, onClick = { gifSheet = true }, label = { Text(stringResource(R.string.compose_gif)) }, leadingIcon = { AbIcon(AbIcons.GifBox, null, tint = AbColors.Pink, size = 18.dp) })
                 FilterChip(selected = state.pollEnabled, onClick = viewModel::togglePoll, label = { Text(stringResource(R.string.compose_poll)) }, leadingIcon = { AbIcon(AbIcons.BarChart, null, tint = AbColors.Gold, size = 18.dp) })
             }
 
@@ -330,6 +343,18 @@ fun CreatePostScreen(
             SwitchRow(stringResource(R.string.compose_allow_comments), state.allowComments, viewModel::onAllowComments)
             Spacer(Modifier.height(40.dp))
         }
+    }
+    if (stickerSheet) {
+        StickerPickerSheet(onDismiss = { stickerSheet = false }, onPick = { url ->
+            stickerSheet = false
+            viewModel.addMedia(listOf(LocalMedia(uri = url, type = "sticker", mimeType = "image/svg+xml", name = "sticker")))
+        })
+    }
+    if (gifSheet) {
+        GifPickerSheet(onDismiss = { gifSheet = false }, onPick = { url ->
+            gifSheet = false
+            viewModel.addMedia(listOf(LocalMedia(uri = url, type = "gif", mimeType = "image/gif", name = "gif")))
+        })
     }
 }
 

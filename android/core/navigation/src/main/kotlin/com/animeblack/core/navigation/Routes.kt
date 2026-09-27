@@ -100,3 +100,9 @@ object NavResultKeys {
     const val CAPTURED_MEDIA_URI = "captured_media_uri"
     const val CAPTURED_MEDIA_TYPE = "captured_media_type"
 }
+
+/**
+ * Navigation arguments end up in the saved back stack; very large inline `data:` media must not be
+ * passed as a route argument (it would exceed the Binder transaction limit when state is saved).
+ */
+fun canOpenInViewer(src: String): Boolean = src.isNotBlank() && (!src.startsWith("data:") || src.length <= 64_000)
