@@ -91,6 +91,11 @@ import com.animeblack.core.model.achievementBadge
 import com.animeblack.core.model.ACHIEVEMENT_BADGES
 import com.animeblack.core.model.Thought
 import com.animeblack.core.navigation.AdminRoute
+import com.animeblack.core.ui.shareText
+import com.animeblack.core.ui.shareLink
+import com.animeblack.core.navigation.AccountSwitcherRoute
+import com.animeblack.core.navigation.EditProfileRoute
+import com.animeblack.core.navigation.QrCardRoute
 import com.animeblack.core.navigation.AnimeDetailRoute
 import com.animeblack.core.navigation.AnimeHubRoute
 import com.animeblack.core.navigation.EconomyRoute
@@ -120,8 +125,21 @@ private data class Tile(@StringRes val label: Int, @DrawableRes val icon: Int, v
 // ============================================================================ Hub
 
 @Composable
+private fun QuickAction(@DrawableRes icon: Int, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(AbColors.Charcoal2).clickable(onClick = onClick).padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AbIcon(icon, null, tint = AbColors.Violet, size = 22.dp)
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
 fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val me = state.me
     val tiles = buildList {
         add(Tile(R.string.more_saved, AbIcons.BookmarkFilled, AbColors.Cyan, SavedPostsRoute))
@@ -146,6 +164,16 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickAction(AbIcons.QrCode2, stringResource(R.string.more_card), Modifier.weight(1f)) { navigate(QrCardRoute) }
+                    QuickAction(AbIcons.Edit, stringResource(R.string.more_edit), Modifier.weight(1f)) { navigate(EditProfileRoute) }
+                    QuickAction(AbIcons.SupervisorAccount, stringResource(R.string.more_switch), Modifier.weight(1f)) { navigate(AccountSwitcherRoute) }
+                    QuickAction(AbIcons.Share, stringResource(R.string.more_share), Modifier.weight(1f)) {
+                        me?.let { u -> context.shareText(u.displayName + "\n" + shareLink("user", u.id), context.getString(com.animeblack.core.ui.R.string.ui_share_via)) }
+                    }
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 GlassCard(Modifier.fillMaxWidth(), onClick = { navigate(ProfileRoute()) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Avatar(me?.avatar, me?.displayName.orEmpty(), size = 60.dp)
@@ -154,6 +182,7 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(me?.displayName.orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 if (me?.showsVerifiedBadge == true) VerifiedBadge(gold = me.isGoldVerified, size = 16.dp, modifier = Modifier.padding(start = 4.dp))
+                                me?.let { u -> state.catalog.badgeFor(u.level)?.let { (_, badge) -> LevelBadgeImage(badge, size = 22.dp, modifier = Modifier.padding(start = 4.dp)) } }
                             }
                             Text(me?.handle.orEmpty(), color = AbColors.TextMuted, style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {

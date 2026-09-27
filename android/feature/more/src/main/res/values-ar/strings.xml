@@ -87,4 +87,8 @@
     <string name="levels_rarity_epic">ملحمية</string>
     <string name="levels_rarity_legendary">أسطورية</string>
     <string name="levels_max_rank">وصلت لأعلى رتبة</string>
+    <string name="more_card">بطاقتي</string>
+    <string name="more_edit">تعديل</string>
+    <string name="more_switch">تبديل الحساب</string>
+    <string name="more_share">مشاركة</string>
 </resources>

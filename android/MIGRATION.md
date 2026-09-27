@@ -29,7 +29,9 @@ cd android
 
 **APK output:** `android/app/build/outputs/apk/debug/app-debug.apk` (~30 MB, debuggable)
 and `android/app/build/outputs/apk/release/app-release.apk` (~7 MB with R8; `app-release-unsigned.apk`
-when no signing key is configured).
+when no signing key is configured). CI additionally publishes `app-release-debugsigned.apk` — the same
+optimised build signed with the committed debug key so testers can install it. It is **for testing
+only**; anything distributed must be signed with the project's own release key.
 
 ### CI
 The existing workflow (`.github/workflows/ci.yml`) runs `npm run build`, whose `build:android:ci`

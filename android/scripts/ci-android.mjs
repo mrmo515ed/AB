@@ -264,6 +264,18 @@ function pushBack(files, message) {
 }
 
 
+/**
+ * Signs a copy of the unsigned release APK with the committed debug key so testers can install
+ * the optimised build. NOT for distribution: production builds must use the owner's release key.
+ */
+function signReleaseForTesting(unsignedApk) {
+  const bt = sh(`ls -d ${androidHome}/build-tools/* | sort -V | tail -1`);
+  const out = path.join(DIST_DIR, "app-release-debugsigned.apk");
+  const ks = path.join(ANDROID_DIR, "app", "debug.keystore");
+  const r = sh(`${bt}/zipalign -f -p 4 ${JSON.stringify(unsignedApk)} /tmp/aligned-release.apk && ${bt}/apksigner sign --ks ${ks} --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out ${out} /tmp/aligned-release.apk && echo signed`);
+  return r.endsWith("signed") && fs.existsSync(out) ? out : null;
+}
+
 /** Recursively collects JUnit XML results from every module. */
 function collectTestResults() {
   const out = { suites: 0, tests: 0, failures: 0, errors: 0, skipped: 0, failed: [] };
@@ -347,11 +359,8 @@ async function smokeTest(apkPath, releaseApk = null) {
   await sleep(8000);
   summary.push(`pid after deep link: ${pid()}`);
   if (releaseApk) {
-    // R8-minified build: sign a throw-away copy with the debug key (CI only) and launch it.
-    const bt = sh(`ls -d ${androidHome}/build-tools/* | sort -V | tail -1`);
-    const signed = "/tmp/app-release-smoke.apk";
-    const ks = path.join(ANDROID_DIR, "app", "debug.keystore");
-    summary.push(`release sign: ${sh(`${bt}/zipalign -f -p 4 ${JSON.stringify(releaseApk)} /tmp/aligned.apk && ${bt}/apksigner sign --ks ${ks} --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out ${signed} /tmp/aligned.apk && echo signed`).slice(-200)}`);
+    // R8-minified build (already signed with the debug key for testing).
+    const signed = releaseApk;
     sh(`${adb} uninstall com.animeblack.app`);
     summary.push(`release install: ${sh(`${adb} install -r -g ${signed} 2>&1 | tail -1`)}`);
     sh(`${adb} shell am start -W -n com.animeblack.app/.MainActivity`);
@@ -428,11 +437,17 @@ async function main() {
       report.push(`## Unit tests`, `- suites: ${tr.suites}, tests: ${tr.tests}, failures: ${tr.failures}, errors: ${tr.errors}, skipped: ${tr.skipped}`, ...tr.failed.map((f) => `- ${f}`), "");
       annotate(tr.failures + tr.errors > 0 ? "error" : "notice", "android-ci tests", `suites ${tr.suites}, tests ${tr.tests}, failures ${tr.failures}, errors ${tr.errors}, skipped ${tr.skipped}\n${tr.failed.join("\n")}`);
     }
+    const unsignedRelease = apks.find((a) => a.kind === "release" && a.file.includes("unsigned"));
+    const testSigned = unsignedRelease ? signReleaseForTesting(unsignedRelease.src) : null;
+    if (testSigned) {
+      const buf = fs.readFileSync(testSigned);
+      annotate("notice", "android-ci test-signed release", `app-release-debugsigned.apk ${buf.length}B sha256=${crypto.createHash("sha256").update(buf).digest("hex")} (debug key; testing only)`);
+    }
     if (msg.includes("[android-smoke]")) {
       const debugApk = apks.find((a) => a.kind === "debug");
       if (debugApk) {
-        const releaseApk = apks.find((a) => a.kind === "release");
-        const smoke = await smokeTest(debugApk.src, releaseApk ? releaseApk.src : null);
+        const signedRelease = apks.find((a) => a.kind === "release" && !a.file.includes("unsigned"));
+        const smoke = await smokeTest(debugApk.src, testSigned || (signedRelease ? signedRelease.src : null));
         annotate(smoke.ok ? "notice" : "error", "android-smoke", smoke.summary);
         if (smoke.crash) annotate("error", "android-smoke crash", smoke.crash);
         if (smoke.appLog) annotate("notice", "android-smoke app log", smoke.appLog);

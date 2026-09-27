@@ -63,12 +63,23 @@ abstract class MessagesViewModel : ViewModel() {
 
 // ============================================================================ Hub
 
-data class MoreUiState(val me: User? = null, val flags: Flags = Flags(), val wallet: Wallet = Wallet())
+data class MoreUiState(
+    val me: User? = null,
+    val flags: Flags = Flags(),
+    val wallet: Wallet = Wallet(),
+    val catalog: LevelBadgeCatalog = LevelBadgeCatalog(),
+)
 
 @HiltViewModel
-class MoreViewModel @Inject constructor(users: UserRepository, flags: FeatureFlags, economy: EconomyRepository) : ViewModel() {
-    val state: StateFlow<MoreUiState> = combine(users.observeMe(), flags.flags, economy.observeWallet()) { me, f, w -> MoreUiState(me, f, w) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MoreUiState())
+class MoreViewModel @Inject constructor(
+    users: UserRepository,
+    flags: FeatureFlags,
+    economy: EconomyRepository,
+    levelBadges: LevelBadgeRepository,
+) : ViewModel() {
+    val state: StateFlow<MoreUiState> = combine(users.observeMe(), flags.flags, economy.observeWallet(), levelBadges.observeCatalog()) { me, f, w, c ->
+        MoreUiState(me, f, w, c)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MoreUiState())
 }
 
 // ============================================================================ Economy

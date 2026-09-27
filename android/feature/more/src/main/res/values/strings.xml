@@ -87,4 +87,8 @@
     <string name="levels_rarity_epic">Epic</string>
     <string name="levels_rarity_legendary">Legendary</string>
     <string name="levels_max_rank">Top rank reached</string>
+    <string name="more_card">My card</string>
+    <string name="more_edit">Edit</string>
+    <string name="more_switch">Switch</string>
+    <string name="more_share">Share</string>
 </resources>
