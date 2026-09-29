@@ -4,7 +4,7 @@
 > deleted, and the old identifiers are abbreviated here on purpose, so the code base contains no
 > reference to the old project.
 
-Target: Firebase project **animeblackapp** (project number 233883926464), Android app
+Target: Firebase project **animeblackapp-b6223** (display name "animeblackapp", project number 233883926464), Android app
 `1:233883926464:android:13747ee836356f1bd21225`, package **com.animeblack.app**, Firestore `(default)`.
 Old: project `the old project (booming-…)` with the named Firestore database
 `ai-studio-51245802-… (old named database)` (used through the web configuration).
