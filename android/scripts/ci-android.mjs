@@ -430,7 +430,7 @@ async function signedInTour(adb, pid) {
     const t = m[0];
     const attr = (n) => (t.match(new RegExp(` ${n}="([^"]*)"`)) || [])[1] || "";
     const b = attr("bounds").match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
-    return { text: attr("text"), desc: attr("content-desc"), cx: b ? Math.round((+b[1] + +b[3]) / 2) : 0, cy: b ? Math.round((+b[2] + +b[4]) / 2) : 0 };
+    return { text: attr("text"), desc: attr("content-desc"), cls: attr("class"), cx: b ? Math.round((+b[1] + +b[3]) / 2) : 0, cy: b ? Math.round((+b[2] + +b[4]) / 2) : 0 };
   });
   const texts = (xml) => [...new Set(nodes(xml).map((n) => n.text || n.desc).filter((x) => x && x.trim()))].slice(0, 30).join(" | ").slice(0, 600);
   const tap = async (xml, ...labels) => {
@@ -451,7 +451,14 @@ async function signedInTour(adb, pid) {
   }
   sh(`${adb} shell input text "CI%sSmoke"`);
   xml = dump();
-  await tap(xml, "Username (letters, numbers, _ .)");
+  // Second text field of the quick-start card (labels move once a field has text).
+  const fields = nodes(xml).filter((n) => n.cls === "android.widget.EditText");
+  if (fields.length >= 2) {
+    sh(`${adb} shell input tap ${fields[1].cx} ${fields[1].cy}`);
+    await sleep(800);
+  } else {
+    await tap(xml, "Username (letters, numbers, _ .)");
+  }
   sh(`${adb} shell input text "${handle}"`);
   sh(`${adb} shell input keyevent 4`);
   await sleep(1000);
