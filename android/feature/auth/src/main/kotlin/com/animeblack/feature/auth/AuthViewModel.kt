@@ -34,6 +34,10 @@ data class AuthUiState(
     val emailError: Boolean = false,
     val passwordError: Boolean = false,
     val nameError: Boolean = false,
+    /** Quick start (guest) form. */
+    val quickName: String = "",
+    val quickUsername: String = "",
+    @StringRes val quickUsernameError: Int? = null,
 )
 
 @HiltViewModel
@@ -72,6 +76,23 @@ class AuthViewModel @Inject constructor(
     fun google(activityContext: Context, onlyAuthorized: Boolean = false) =
         perform { auth.signInWithGoogle(activityContext, onlyAuthorized) }
 
+    /** Guest access: full features on a real account (upgradable later). */
+    fun guest() = perform { auth.signInAsGuest() }
+
+    fun onQuickName(value: String) = _state.update { it.copy(quickName = value.take(50), error = null) }
+    fun onQuickUsername(value: String) = _state.update { it.copy(quickUsername = value.take(24), quickUsernameError = null, error = null) }
+
+    /** Quick start: name + username, straight into the app (no e-mail or password). */
+    fun quickStart() {
+        val s = _state.value
+        val username = Validators.normalizeUsername(s.quickUsername)
+        if (s.quickUsername.isNotBlank() && !Validators.isValidUsername(username)) {
+            _state.update { it.copy(quickUsernameError = R.string.auth_err_username_invalid) }
+            return
+        }
+        perform { auth.signInAsGuest(s.quickName, s.quickUsername) }
+    }
+
     fun sendReset() {
         if (!validate(requireName = false, requirePassword = false)) return
         viewModelScope.launch {
@@ -102,6 +123,11 @@ class AuthViewModel @Inject constructor(
             is AppError.Cancelled -> null
             is AppError.Network -> R.string.auth_err_network
             is AppError.RateLimited -> R.string.auth_err_too_many
+            is AppError.Validation -> when (error.reason) {
+                "taken" -> R.string.auth_err_username_taken
+                "invalid" -> R.string.auth_err_username_invalid
+                else -> R.string.auth_err_generic
+            }
             is AppError.Auth -> when (error.code) {
                 "invalid-credential", "error_wrong_password", "error_invalid_credential" -> R.string.auth_err_invalid_credential
                 "user-not-found", "error_user_not_found" -> R.string.auth_err_user_not_found
@@ -109,6 +135,8 @@ class AuthViewModel @Inject constructor(
                 "weak-password" -> R.string.auth_err_weak_password
                 "google-config", "google-not-configured" -> R.string.auth_err_google_config
                 "google-no-account" -> R.string.auth_err_google_no_account
+                // Anonymous provider disabled in the Firebase console.
+                "error_operation_not_allowed", "error_admin_restricted_operation", "operation-not-allowed", "admin-restricted-operation" -> R.string.auth_err_guest_disabled
                 else -> R.string.auth_err_generic
             }
             else -> R.string.auth_err_generic

@@ -44,4 +44,13 @@
     <string name="auth_err_google_no_account">No Google account found on this device</string>
     <string name="auth_err_generic">Sign-in failed. Please try again.</string>
     <string name="auth_terms_notice">By continuing you agree to the Terms and the Privacy Policy.</string>
+    <string name="auth_guest">Continue as guest</string>
+    <string name="auth_guest_hint">Use every feature right away. You can save it as a full account later.</string>
+    <string name="auth_err_guest_disabled">Guest access is not enabled for this project yet (Firebase console → Authentication → Anonymous).</string>
+    <string name="auth_quick_title">Quick start</string>
+    <string name="auth_quick_name">Your name</string>
+    <string name="auth_quick_username">Username (letters, numbers, _ .)</string>
+    <string name="auth_quick_enter">Enter now</string>
+    <string name="auth_err_username_taken">This username is taken. Try another one.</string>
+    <string name="auth_err_username_invalid">Username: 3–24 lowercase English letters, numbers, dots or underscores.</string>
 </resources>

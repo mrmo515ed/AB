@@ -61,6 +61,7 @@ import com.animeblack.core.designsystem.component.AbTextField
 import com.animeblack.core.designsystem.component.AbTopBar
 import com.animeblack.core.designsystem.component.Avatar
 import com.animeblack.core.designsystem.component.GlassButton
+import androidx.compose.foundation.layout.width
 import com.animeblack.core.designsystem.component.GlassCard
 import com.animeblack.core.designsystem.component.GradientButton
 import com.animeblack.core.designsystem.component.glow
@@ -179,6 +180,8 @@ fun LoginScreen(
                     if (account.provider == "google.com") viewModel.google(context, onlyAuthorized = true) else viewModel.prefill(account.email)
                 })
                 ErrorBanner(state.error)
+                QuickStartCard(state, viewModel)
+                OrDivider()
                 AbTextField(
                     value = state.email,
                     onValueChange = viewModel::onEmail,
@@ -200,6 +203,46 @@ fun LoginScreen(
                 Text(stringResource(R.string.auth_terms_notice), style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+/** Name + username and straight into the app (a guest account that can be saved later). */
+@Composable
+private fun QuickStartCard(state: AuthUiState, viewModel: AuthViewModel) {
+    GlassCard(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AbIcon(AbIcons.RocketLaunch, null, tint = AbColors.Gold)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.auth_quick_title), style = MaterialTheme.typography.titleMedium)
+        }
+        Text(
+            stringResource(R.string.auth_guest_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = AbTheme.colors.textMuted,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        AbTextField(
+            value = state.quickName,
+            onValueChange = viewModel::onQuickName,
+            label = stringResource(R.string.auth_quick_name),
+            leadingIcon = AbIcons.Person,
+        )
+        Spacer(Modifier.height(8.dp))
+        AbTextField(
+            value = state.quickUsername,
+            onValueChange = viewModel::onQuickUsername,
+            label = stringResource(R.string.auth_quick_username),
+            leadingIcon = AbIcons.AlternateEmail,
+            error = state.quickUsernameError?.let { stringResource(it) },
+        )
+        Spacer(Modifier.height(12.dp))
+        GradientButton(
+            text = stringResource(R.string.auth_quick_enter),
+            onClick = viewModel::quickStart,
+            loading = state.loading,
+            icon = AbIcons.RocketLaunch,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

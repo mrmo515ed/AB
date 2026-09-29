@@ -44,4 +44,13 @@
     <string name="auth_err_google_no_account">لا يوجد حساب Google على هذا الجهاز</string>
     <string name="auth_err_generic">تعذّر تسجيل الدخول. حاول مجدداً.</string>
     <string name="auth_terms_notice">بالمتابعة فإنك توافق على الشروط وسياسة الخصوصية.</string>
+    <string name="auth_guest">الدخول كضيف</string>
+    <string name="auth_guest_hint">استخدم كل الميزات فوراً، ويمكنك حفظه كحساب كامل لاحقاً.</string>
+    <string name="auth_err_guest_disabled">الدخول كضيف غير مفعّل في مشروع Firebase بعد (Authentication ← Sign-in method ← Anonymous).</string>
+    <string name="auth_quick_title">دخول سريع</string>
+    <string name="auth_quick_name">اسمك</string>
+    <string name="auth_quick_username">اسم المستخدم (حروف إنجليزية وأرقام و _ .)</string>
+    <string name="auth_quick_enter">ادخل الآن</string>
+    <string name="auth_err_username_taken">اسم المستخدم هذا محجوز، جرّب اسماً آخر.</string>
+    <string name="auth_err_username_invalid">اسم المستخدم: من 3 إلى 24 حرفاً إنجليزياً صغيراً أو رقماً أو نقطة أو شرطة سفلية.</string>
 </resources>

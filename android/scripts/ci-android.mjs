@@ -14,6 +14,8 @@
  *       [android-probe]   report runner toolchain + latest stable library versions.
  *       [android-report]  push android/ci-reports/* (build report + log tail) back to the branch.
  *       [android-apk]     also push the built APKs to android/apk/ on the same branch.
+ *       [firebase-probe]  REST checks: guest sign-in enabled, API key accepts Android, Firestore reachable.
+ *       [android-publish] build the release and publish APKs to the rolling `android-latest` release.
  *       [android-smoke]   boot an emulator, install the debug APK, launch it (and a deep link)
  *                         and report crashes / process state / visible UI texts.
  *     Pushes use the workflow's own checkout credentials and only target the branch that
@@ -276,6 +278,118 @@ function signReleaseForTesting(unsignedApk) {
   return r.endsWith("signed") && fs.existsSync(out) ? out : null;
 }
 
+/**
+ * Firebase readiness check with the same REST calls the Android SDK makes (Android package + cert
+ * headers): is anonymous (guest) sign-in enabled, does the API key accept Android requests, is the
+ * named Firestore database reachable. A temporary anonymous user is deleted right away.
+ */
+async function firebaseProbe() {
+  const out = [];
+  let cfg;
+  try {
+    const own = path.join(ANDROID_DIR, "app", "firebase-web-config.json");
+    cfg = JSON.parse(fs.readFileSync(fs.existsSync(own) ? own : path.join(ROOT, "firebase-applet-config.json"), "utf8"));
+  } catch (e) {
+    return `config: unreadable (${e})`;
+  }
+  const key = cfg.apiKey;
+  const db = cfg.firestoreDatabaseId || "(default)";
+  const android = { "X-Android-Package": "com.animeblack.app", "X-Android-Cert": "4E3D7B4F5E12728AC2AE2130CD83E49D6D58CE9F" };
+  const call = async (url, opts) => {
+    try {
+      const r = await fetch(url, opts);
+      const text = await r.text();
+      let json = {};
+      try { json = JSON.parse(text); } catch (_) {}
+      return { status: r.status, json, text };
+    } catch (e) {
+      return { status: 0, json: {}, text: String(e) };
+    }
+  };
+  const errOf = (r) => (r.json && r.json.error ? `${r.json.error.message || ""} ${r.json.error.status || ""}`.trim() : r.status === 200 ? "OK" : r.text.slice(0, 200));
+  const signUp = (headers) => call(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${key}`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify({ returnSecureToken: true }),
+  });
+  let r = await signUp(android);
+  out.push(`guest sign-in (Android headers): HTTP ${r.status} ${errOf(r)}`);
+  let token = r.json.idToken;
+  if (!token) {
+    const w = await signUp({ Referer: `https://${cfg.authDomain}/` });
+    out.push(`guest sign-in (web referer): HTTP ${w.status} ${errOf(w)}`);
+    token = w.json.idToken;
+    if (token) out.push("=> the API key only accepts web requests: register the Android app (google-services.json) or relax the key restriction.");
+  }
+  const pw = await call(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...android },
+    body: JSON.stringify({ email: "probe-nonexistent@animeblack.invalid", password: "x-probe-123456", returnSecureToken: true }),
+  });
+  out.push(`e-mail provider (expect EMAIL_NOT_FOUND/INVALID_LOGIN_CREDENTIALS): HTTP ${pw.status} ${errOf(pw)}`);
+  if (token) {
+    const fr = await call(`https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${encodeURIComponent(db)}/documents/users?pageSize=1&mask.fieldPaths=name`, {
+      headers: { Authorization: `Bearer ${token}`, ...android },
+    });
+    out.push(`firestore read users (db ${db}): HTTP ${fr.status} ${fr.status === 200 ? "OK" : errOf(fr)}`);
+    const del = await call(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${key}`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...android }, body: JSON.stringify({ idToken: token }),
+    });
+    out.push(`cleanup temporary guest: HTTP ${del.status}`);
+  }
+  return out.join("\n");
+}
+
+/** Token persisted by actions/checkout (same GITHUB_TOKEN the workflow runs with). */
+function checkoutToken() {
+  const header = sh(`git -C ${JSON.stringify(ROOT)} config --get http.https://github.com/.extraheader`);
+  const m = header.match(/basic\s+([A-Za-z0-9+/=]+)/i);
+  if (!m) return null;
+  const decoded = Buffer.from(m[1], "base64").toString("utf8");
+  const i = decoded.indexOf(":");
+  return i >= 0 ? decoded.slice(i + 1) : null;
+}
+
+/**
+ * Publishes the APKs to the rolling `android-latest` pre-release so there is a permanent public
+ * download link. Needs "Read and write" workflow permissions (repository Settings → Actions).
+ */
+async function publishRelease(files, notes) {
+  const token = checkoutToken();
+  const repo = process.env.GITHUB_REPOSITORY;
+  const sha = process.env.GITHUB_SHA;
+  if (!token || !repo || !sha) return { ok: false, text: "skipped: no workflow token available" };
+  const api = (p, opts = {}) => fetch(`https://api.github.com/repos/${repo}${p}`, {
+    ...opts,
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) },
+  });
+  const tag = "android-latest";
+  let r = await api(`/git/refs/tags/${tag}`, { method: "PATCH", body: JSON.stringify({ sha, force: true }) });
+  if (r.status === 404 || r.status === 422) r = await api(`/git/refs`, { method: "POST", body: JSON.stringify({ ref: `refs/tags/${tag}`, sha }) });
+  if (r.status === 403 || r.status === 401) {
+    return { ok: false, text: "NO WRITE PERMISSION: enable Settings > Actions > General > Workflow permissions > 'Read and write permissions', then push again with [android-publish]." };
+  }
+  const existing = await api(`/releases/tags/${tag}`);
+  let release = existing.status === 200 ? await existing.json() : null;
+  const body = [`Latest Android build of Anime Black (commit ${sha.slice(0, 7)}).`, "", notes].join("\n");
+  if (!release) {
+    const c = await api(`/releases`, { method: "POST", body: JSON.stringify({ tag_name: tag, name: "Anime Black Android — latest build", body, prerelease: true, make_latest: "false" }) });
+    if (c.status >= 300) return { ok: false, text: `create release failed: HTTP ${c.status} ${(await c.text()).slice(0, 200)}` };
+    release = await c.json();
+  } else {
+    await api(`/releases/${release.id}`, { method: "PATCH", body: JSON.stringify({ body, name: "Anime Black Android — latest build" }) });
+    for (const a of release.assets || []) await api(`/releases/assets/${a.id}`, { method: "DELETE" });
+  }
+  const links = [];
+  for (const f of files) {
+    const data = fs.readFileSync(f.path);
+    const up = await fetch(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(f.name)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/vnd.android.package-archive", "Content-Length": String(data.length) },
+      body: data,
+    });
+    links.push(up.status < 300 ? `https://github.com/${repo}/releases/download/${tag}/${f.name}` : `${f.name}: upload failed HTTP ${up.status}`);
+  }
+  return { ok: links.every((l) => l.startsWith("https://")), text: links.join("\n") };
+}
+
 /** Recursively collects JUnit XML results from every module. */
 function collectTestResults() {
   const out = { suites: 0, tests: 0, failures: 0, errors: 0, skipped: 0, failed: [] };
@@ -393,6 +507,12 @@ async function main() {
   const report = [`# Android CI report`, ``, `- commit: ${process.env.GITHUB_SHA || sh("git rev-parse HEAD")}`, `- run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, `- date: ${new Date().toISOString()}`, ``];
   const pushFiles = [];
 
+  if (msg.includes("[firebase-probe]")) {
+    const fp = await firebaseProbe();
+    annotate("notice", "firebase-probe", fp);
+    report.push("## Firebase probe", "```", fp, "```", "");
+  }
+
   if (wantProbe) {
     const p = await probe();
     report.push("## Runner", "```", p.env, "```", "", "## Latest stable versions (Maven metadata)", "```", p.versions, "```", "");
@@ -404,7 +524,7 @@ async function main() {
     const javaHome = process.env.JAVA_HOME_21_X64 || process.env.JAVA_HOME_17_X64 || process.env.JAVA_HOME;
     const tasks = [":app:assembleDebug"];
     if (!msg.includes("[android-skip-tests]")) tasks.push("testDebugUnitTest");
-    if (msg.includes("[android-release]") || msg.includes("[android-full]")) tasks.push(":app:assembleRelease");
+    if (msg.includes("[android-release]") || msg.includes("[android-full]") || msg.includes("[android-publish]")) tasks.push(":app:assembleRelease");
     if (msg.includes("[android-lint]") || msg.includes("[android-full]")) tasks.push(":app:lintDebug");
     const res = runGradle(tasks, javaHome);
     fs.writeFileSync(path.join(REPORT_DIR, "build.log"), res.log.slice(-1_500_000));
@@ -455,6 +575,15 @@ async function main() {
       } else {
         annotate("warning", "android-smoke", "No debug APK to test.");
       }
+    }
+    if (msg.includes("[android-publish]") && res.ok) {
+      const debugApk = apks.find((a) => a.kind === "debug");
+      const files = [];
+      if (testSigned) files.push({ path: testSigned, name: "AnimeBlack.apk" });
+      if (debugApk) files.push({ path: debugApk.src, name: "AnimeBlack-debug.apk" });
+      const pub = await publishRelease(files, "AnimeBlack.apk: optimised build signed with the shared debug key (testing only).\nAnimeBlack-debug.apk: debuggable build.");
+      annotate(pub.ok ? "notice" : "warning", "android-publish", pub.text);
+      report.push("## Publish", "```", pub.text, "```", "");
     }
     if (wantApk && res.ok) {
       const apkOut = path.join(ANDROID_DIR, "apk");

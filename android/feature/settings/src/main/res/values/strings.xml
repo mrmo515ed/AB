@@ -77,4 +77,15 @@
     <string name="set_saved">Saved</string>
     <string name="legal_terms_body">1. Accepting the terms\nBy using Anime Black you fully agree to these terms. If you disagree with any clause, please stop using the platform.\n\n2. Account and eligibility\nYou must be at least 13 years old. You are responsible for protecting your sign-in details and for all activity under your account.\n\n3. Acceptable content\nPosting abusive, violent or pornographic content, or content that infringes the intellectual property of anime and manga, is prohibited. The administration may remove content and suspend accounts without prior notice.\n\n4. Virtual currency\n“Black coins” and “radiant stars” are in-app virtual items only. They have no real monetary value and cannot be refunded.\n\n5. Intellectual property\nAll logos and images belonging to specific anime are the property of their owners. The platform is for entertainment and community use only.</string>
     <string name="legal_privacy_body">Data we collect\n• Account data (name, e-mail, photo)\n• Your activity on the platform (posts, interactions)\n• Device information for security statistics\n\nStorage\nData is stored in Firebase Firestore with a local cache on your device so the app works offline.\n\nYour rights\nYou can delete your account permanently from the account settings.</string>
+    <string name="set_guest_title">You are using a guest account</string>
+    <string name="set_guest_body">Everything works, but a guest account is lost if you sign out or uninstall. Save it to keep your posts, chats and coins.</string>
+    <string name="set_guest_email">Save with e-mail</string>
+    <string name="set_guest_google">Link a Google account</string>
+    <string name="set_guest_upgraded">Your account is saved. All your data was kept.</string>
+    <string name="set_sign_out_guest_confirm">Guest accounts cannot be recovered after signing out. Save it with an e-mail or Google first, or sign out anyway?</string>
+    <string name="set_guest_keep_data">Your profile, posts, chats and coins stay exactly the same.</string>
+    <string name="set_guest_name">Display name (optional)</string>
+    <string name="set_guest_email_label">E-mail</string>
+    <string name="set_guest_password">Password (6+ characters)</string>
+    <string name="set_guest_save">Save account</string>
 </resources>

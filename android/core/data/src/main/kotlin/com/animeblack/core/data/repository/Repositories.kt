@@ -49,6 +49,8 @@ sealed interface AuthState {
         val provider: String,
         val displayName: String?,
         val photoUrl: String?,
+        /** Guest session (Firebase anonymous account): full access, upgradable to a permanent account. */
+        val isAnonymous: Boolean = false,
     ) : AuthState
 }
 
@@ -71,6 +73,16 @@ interface AuthRepository {
 
     /** Google sign-in with Credential Manager; [activityContext] must be an Activity. */
     suspend fun signInWithGoogle(activityContext: Context, onlyAuthorizedAccounts: Boolean = false): AppResult<Unit>
+    /**
+     * Quick start / guest access: a real Firebase account (anonymous, or a device-bound account when
+     * the anonymous provider is disabled) whose profile uses [name] / [username] (generated if blank).
+     */
+    suspend fun signInAsGuest(name: String = "", username: String = ""): AppResult<Unit>
+
+    /** Turns the current guest into a permanent account (same uid, all data kept). */
+    suspend fun upgradeGuestWithEmail(name: String, email: String, password: String): AppResult<Unit>
+
+    suspend fun upgradeGuestWithGoogle(activityContext: Context): AppResult<Unit>
     suspend fun sendPasswordReset(email: String): AppResult<Unit>
     suspend fun sendEmailVerification(): AppResult<Unit>
     suspend fun reloadUser(): AppResult<Boolean>

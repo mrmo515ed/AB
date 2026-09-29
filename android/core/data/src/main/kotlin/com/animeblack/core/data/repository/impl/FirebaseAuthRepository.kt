@@ -23,6 +23,8 @@ import com.animeblack.core.datastore.SettingsDataSource
 import com.animeblack.core.model.SavedAccount
 import com.animeblack.core.model.User
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
@@ -65,6 +67,8 @@ class FirebaseAuthRepository @Inject constructor(
 
     @Volatile private var bootstrappedUid: String? = null
     @Volatile private var pendingSignUpName: String? = null
+    @Volatile private var pendingGuestName: String? = null
+    @Volatile private var pendingGuestUsername: String? = null
 
     init {
         auth.addAuthStateListener { firebaseAuth -> onAuthChanged(firebaseAuth.currentUser) }
@@ -90,10 +94,14 @@ class FirebaseAuthRepository @Inject constructor(
         uid = uid,
         email = email,
         emailVerified = isEmailVerified,
-        provider = providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "password",
+        provider = if (isGuestUser()) PROVIDER_GUEST else providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "password",
         displayName = displayName,
         photoUrl = photoUrl?.toString(),
+        isAnonymous = isGuestUser(),
     )
+
+    /** Anonymous accounts and quick-start accounts (internal `.invalid` address) are guests. */
+    private fun FirebaseUser.isGuestUser(): Boolean = isAnonymous || email.orEmpty().endsWith("@$QUICK_ACCOUNT_DOMAIN")
 
     /**
      * Mirrors the web onAuthStateChanged bootstrap: existing documents are kept (only blank fields are
@@ -116,7 +124,7 @@ class FirebaseAuthRepository @Inject constructor(
                 if (username.isBlank() || username == "guest" || username == "otaku") {
                     updates["username"] = Validators.defaultUsername(user.email, user.uid)
                 }
-                if (data.str("email").isBlank() && !user.email.isNullOrBlank()) updates["email"] = user.email
+                if (data.str("email").isBlank() && !user.email.isNullOrBlank() && !user.isGuestUser()) updates["email"] = user.email
                 if (data.str("avatar").isBlank() && user.photoUrl != null) updates["avatar"] = user.photoUrl.toString()
                 if (data.str("name").isBlank() && !user.displayName.isNullOrBlank()) updates["name"] = user.displayName
                 if (!data.containsKey("id")) {
@@ -135,22 +143,28 @@ class FirebaseAuthRepository @Inject constructor(
             }
             else -> {
                 ref.set(defaultUserDocument(user), SetOptions.merge())
-                ProfileStatus.NeedsCompletion
+                // Guests get a ready-to-use profile (editable later).
+                if (user.isGuestUser()) ProfileStatus.Ready else ProfileStatus.NeedsCompletion
             }
         }
         pendingSignUpName = null
+        pendingGuestName = null
+        pendingGuestUsername = null
         _profileStatus.value = status
 
-        settings.upsertSavedAccount(
-            SavedAccount(
-                uid = user.uid,
-                name = user.displayName ?: snapshot?.data?.str("name").orEmpty(),
-                email = user.email.orEmpty(),
-                avatar = user.photoUrl?.toString() ?: snapshot?.data?.str("avatar").orEmpty(),
-                provider = (user.toState()).provider,
-                lastUsedAt = System.currentTimeMillis(),
-            ),
-        )
+        // A guest has no credentials to sign back in with, so it is never offered in the switcher.
+        if (!user.isGuestUser()) {
+            settings.upsertSavedAccount(
+                SavedAccount(
+                    uid = user.uid,
+                    name = user.displayName ?: snapshot?.data?.str("name").orEmpty(),
+                    email = user.email.orEmpty(),
+                    avatar = user.photoUrl?.toString() ?: snapshot?.data?.str("avatar").orEmpty(),
+                    provider = (user.toState()).provider,
+                    lastUsedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
         analytics.setUser(user.uid)
         sessionManager.start(user.uid)
         pushTokenManager.register()
@@ -158,6 +172,7 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     private fun defaultUserDocument(user: FirebaseUser): Map<String, Any?> {
+        if (user.isGuestUser()) return guestUserDocument(user)
         val isAdminEmail = user.email.equals(User.ADMIN_EMAIL, ignoreCase = true)
         val name = pendingSignUpName ?: user.displayName ?: "أوتاكو أنمي بلاك"
         return mapOf(
@@ -187,6 +202,148 @@ class FirebaseAuthRepository @Inject constructor(
             "following_list" to emptyList<String>(),
             "profileCompleted" to false,
             "platform" to "android",
+        )
+    }
+
+    /** Same shape (and starter economy) as a regular profile, with a generated guest identity. */
+    private fun guestUserDocument(user: FirebaseUser): Map<String, Any?> {
+        val tag = user.uid.takeLast(4).uppercase()
+        return mapOf(
+            "id" to user.uid,
+            "uid" to user.uid,
+            "name" to (pendingGuestName ?: user.displayName?.takeIf { it.isNotBlank() } ?: "زائر $tag"),
+            "username" to (pendingGuestUsername ?: "guest_" + user.uid.take(8).lowercase().filter { it.isLetterOrDigit() }),
+            "email" to "",
+            "avatar" to DEFAULT_AVATAR,
+            "bio" to "ضيف في مجتمع أنمي بلاك",
+            "role" to User.ROLE_MEMBER,
+            "level" to 1,
+            "followers" to 0,
+            "following" to 0,
+            "reputation" to 15,
+            "coins" to 150,
+            "stars" to 10,
+            "joined" to System.currentTimeMillis(),
+            "badges" to listOf("badge_rookie"),
+            "titles" to emptyList<String>(),
+            "equippedTitle" to null,
+            "history" to emptyList<Any>(),
+            "saved" to emptyList<String>(),
+            "following_list" to emptyList<String>(),
+            "profileCompleted" to true,
+            "isGuest" to true,
+            "platform" to "android",
+        )
+    }
+
+    override suspend fun signInAsGuest(name: String, username: String): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val cleanName = name.trim().take(50)
+        val cleanUsername = Validators.normalizeUsername(username)
+        if (cleanUsername.isNotEmpty()) {
+            if (!Validators.isValidUsername(cleanUsername)) throw AppErrorException(AppError.Validation("username", "invalid"))
+            val taken = !firestore.collection(Collections.USERS).whereEqualTo("username", cleanUsername).limit(1).get().await().isEmpty
+            if (taken) throw AppErrorException(AppError.Validation("username", "taken"))
+        }
+        pendingGuestName = cleanName.ifEmpty { null }
+        pendingGuestUsername = cleanUsername.ifEmpty { null }
+        try {
+            val result = try {
+                auth.signInAnonymously().await()
+            } catch (e: FirebaseAuthException) {
+                if (e.errorCode != "ERROR_OPERATION_NOT_ALLOWED" && e.errorCode != "ERROR_ADMIN_RESTRICTED_OPERATION") throw e
+                // Anonymous provider disabled: create a device-bound account with an address that can
+                // never receive mail (RFC 2606 `.invalid`), so password resets cannot hijack it.
+                val handle = (cleanUsername.ifEmpty { "guest" } + "_" + randomToken(6)).take(40)
+                auth.createUserWithEmailAndPassword("$handle@$QUICK_ACCOUNT_DOMAIN", randomToken(32)).await()
+            }
+            val user = result.user
+            if (user != null && cleanName.isNotEmpty()) {
+                user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(cleanName).build()).await()
+            }
+        } catch (e: Exception) {
+            pendingGuestName = null
+            pendingGuestUsername = null
+            throw e
+        }
+        analytics.logEvent("login", mapOf("method" to PROVIDER_GUEST))
+    }
+
+    private fun randomToken(length: Int): String {
+        val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        val random = java.security.SecureRandom()
+        return (1..length).map { chars[random.nextInt(chars.length)] }.joinToString("")
+    }
+
+    override suspend fun upgradeGuestWithEmail(name: String, email: String, password: String): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val guest = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
+        if (!guest.isGuestUser()) throw AppErrorException(AppError.Validation("account", "not-guest"))
+        val cleanEmail = email.trim()
+        val linked = if (guest.isAnonymous) {
+            guest.linkWithCredential(EmailAuthProvider.getCredential(cleanEmail, password)).await().user ?: guest
+        } else {
+            // Quick-start account: set the real password now; the e-mail switches once verified.
+            guest.updatePassword(password).await()
+            guest.verifyBeforeUpdateEmail(cleanEmail).await()
+            guest
+        }
+        val cleanName = name.trim()
+        if (cleanName.isNotEmpty()) {
+            linked.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(cleanName).build()).await()
+        }
+        val updates = mutableMapOf<String, Any?>("email" to cleanEmail, "isGuest" to false, "updatedAt" to System.currentTimeMillis())
+        if (cleanName.isNotEmpty()) updates["name"] = cleanName
+        firestore.collection(Collections.USERS).document(linked.uid).set(updates, SetOptions.merge())
+        if (guestWasAnonymousOrVerified(linked)) {
+            try {
+                linked.sendEmailVerification().await()
+            } catch (_: Exception) {
+                // Optional; can be resent later.
+            }
+        }
+        finishUpgrade(linked, cleanName.ifEmpty { null })
+        analytics.logEvent("guest_upgrade", mapOf("method" to "password"))
+    }
+
+    override suspend fun upgradeGuestWithGoogle(activityContext: Context): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val guest = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
+        if (!guest.isGuestUser()) throw AppErrorException(AppError.Validation("account", "not-guest"))
+        val token = google.requestIdToken(activityContext, onlyAuthorizedAccounts = false)
+        val linked = guest.linkWithCredential(GoogleAuthProvider.getCredential(token.idToken, null)).await().user ?: guest
+        val ref = firestore.collection(Collections.USERS).document(linked.uid)
+        val current = try {
+            ref.get().await().data.orEmpty()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        val updates = mutableMapOf<String, Any?>("email" to (linked.email ?: token.email), "isGuest" to false, "updatedAt" to System.currentTimeMillis())
+        // Adopt the Google identity only where the guest still has generated defaults.
+        if (current.str("name").startsWith("زائر") && !token.displayName.isNullOrBlank()) updates["name"] = token.displayName
+        if ((current.str("avatar").isBlank() || current.str("avatar") == DEFAULT_AVATAR) && !token.photoUrl.isNullOrBlank()) updates["avatar"] = token.photoUrl
+        ref.set(updates, SetOptions.merge())
+        finishUpgrade(linked, token.displayName)
+        analytics.logEvent("guest_upgrade", mapOf("method" to "google"))
+    }
+
+    /** Linked anonymous accounts get a verification mail; quick accounts already got one from verifyBeforeUpdateEmail. */
+    private fun guestWasAnonymousOrVerified(user: FirebaseUser): Boolean = !user.email.orEmpty().endsWith("@$QUICK_ACCOUNT_DOMAIN")
+
+    /** Refreshes auth state after linking and makes the account available in the switcher. */
+    private suspend fun finishUpgrade(user: FirebaseUser, name: String?) {
+        try {
+            user.reload().await()
+        } catch (_: Exception) {
+        }
+        val fresh = auth.currentUser ?: user
+        _authState.value = fresh.toState()
+        settings.upsertSavedAccount(
+            SavedAccount(
+                uid = fresh.uid,
+                name = name ?: fresh.displayName.orEmpty(),
+                email = fresh.email.orEmpty(),
+                avatar = fresh.photoUrl?.toString().orEmpty(),
+                provider = fresh.toState().provider,
+                lastUsedAt = System.currentTimeMillis(),
+            ),
         )
     }
 
@@ -267,6 +424,12 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     companion object {
+        /** Provider id reported for guest (anonymous / quick-start) sessions. */
+        const val PROVIDER_GUEST = "anonymous"
+
+        /** Reserved, undeliverable domain (RFC 2606) for quick-start accounts. */
+        const val QUICK_ACCOUNT_DOMAIN = "guest.animeblack.invalid"
+
         /** Web default avatar (`AV[0]`), used when the provider has no photo. */
         const val DEFAULT_AVATAR = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"
         private const val RECENT_LOGIN_WINDOW_MS = 5 * 60_000L

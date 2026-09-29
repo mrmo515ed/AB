@@ -1,6 +1,11 @@
 package com.animeblack.feature.settings
 
 import android.app.Activity
+import com.animeblack.core.designsystem.component.AbTextField
+import com.animeblack.core.data.repository.AuthState
+import com.animeblack.core.common.util.Validators
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -121,6 +126,33 @@ class SettingsViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 3)
     val messages: SharedFlow<Int> = _messages.asSharedFlow()
 
+    /** True while the user is on a guest (anonymous) account. */
+    val isGuest: StateFlow<Boolean> = auth.authState.map { (it as? AuthState.SignedIn)?.isAnonymous == true }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val upgrading = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun upgradeWithEmail(name: String, email: String, password: String, onDone: () -> Unit) {
+        if (upgrading.value) return
+        upgrading.value = true
+        viewModelScope.launch {
+            val r = auth.upgradeGuestWithEmail(name, email, password)
+            upgrading.value = false
+            handle(r, R.string.set_guest_upgraded)
+            if (r is AppResult.Success) onDone()
+        }
+    }
+
+    fun upgradeWithGoogle(activityContext: Context) {
+        if (upgrading.value) return
+        upgrading.value = true
+        viewModelScope.launch {
+            val r = auth.upgradeGuestWithGoogle(activityContext)
+            upgrading.value = false
+            if (r is AppResult.Failure && r.error is com.animeblack.core.common.result.AppError.Cancelled) return@launch
+            handle(r, R.string.set_guest_upgraded)
+        }
+    }
+
     private fun handle(r: AppResult<*>, ok: Int? = null) {
         when (r) {
             is AppResult.Success -> ok?.let { _messages.tryEmit(it) }
@@ -169,15 +201,31 @@ private fun rememberMessages(viewModel: SettingsViewModel): SnackbarHostState {
 @Composable
 fun SettingsScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
     val s by viewModel.appSettings.collectAsStateWithLifecycle()
+    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
+    val upgrading by viewModel.upgrading.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = rememberMessages(viewModel)
     var confirmSignOut by remember { mutableStateOf(false) }
+    var emailUpgrade by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val language = remember { mutableStateOf(AppLocale.current(context)) }
     val notificationsBlocked = !NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     Scaffold(topBar = { AbTopBar(title = stringResource(R.string.set_title), onBack = onBack) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            if (isGuest) {
+                GlassCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AbIcon(AbIcons.Person, null, tint = AbColors.Gold)
+                        Spacer(Modifier.width(10.dp))
+                        Text(stringResource(R.string.set_guest_title), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(stringResource(R.string.set_guest_body), color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
+                    GradientButton(stringResource(R.string.set_guest_email), onClick = { emailUpgrade = true }, icon = AbIcons.Mail, loading = upgrading, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.padding(4.dp))
+                    GlassButton(stringResource(R.string.set_guest_google), onClick = { viewModel.upgradeWithGoogle(context) }, icon = AbIcons.AccountCircle, modifier = Modifier.fillMaxWidth())
+                }
+            }
             SectionHeader(stringResource(R.string.set_account))
             SettingsCard {
                 LinkRow(AbIcons.Edit, stringResource(R.string.set_edit_profile)) { navigate(EditProfileRoute) }
@@ -266,12 +314,38 @@ fun SettingsScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Setti
     if (confirmSignOut) {
         ConfirmDialog(
             title = stringResource(R.string.set_sign_out),
-            message = stringResource(R.string.set_sign_out_confirm),
+            message = stringResource(if (isGuest) R.string.set_sign_out_guest_confirm else R.string.set_sign_out_confirm),
             onConfirm = {
                 confirmSignOut = false
                 viewModel.signOut()
             },
             onDismiss = { confirmSignOut = false },
+            destructive = isGuest,
+        )
+    }
+    if (emailUpgrade) {
+        var name by remember { mutableStateOf("") }
+        var email by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
+        val valid = Validators.isValidEmail(email) && Validators.isValidPassword(password)
+        AlertDialog(
+            onDismissRequest = { emailUpgrade = false },
+            containerColor = AbColors.Charcoal2,
+            title = { Text(stringResource(R.string.set_guest_email)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.set_guest_keep_data), style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                    AbTextField(name, { name = it.take(50) }, label = stringResource(R.string.set_guest_name), leadingIcon = AbIcons.Person)
+                    AbTextField(email, { email = it.trim().take(120) }, label = stringResource(R.string.set_guest_email_label), leadingIcon = AbIcons.Mail)
+                    AbTextField(password, { password = it.take(128) }, label = stringResource(R.string.set_guest_password), leadingIcon = AbIcons.Key)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = valid && !upgrading, onClick = {
+                    viewModel.upgradeWithEmail(name, email, password) { emailUpgrade = false }
+                }) { Text(stringResource(R.string.set_guest_save)) }
+            },
+            dismissButton = { TextButton(onClick = { emailUpgrade = false }) { Text(stringResource(com.animeblack.core.ui.R.string.ui_cancel)) } },
         )
     }
     if (confirmDelete) {

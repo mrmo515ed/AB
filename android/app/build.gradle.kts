@@ -14,9 +14,9 @@ plugins {
 // Firebase configuration
 //  * Preferred: register the Android app (com.animeblack.app) in the Firebase console and drop the
 //    generated google-services.json into android/app/. The Google Services plugin is then applied.
-//  * Fallback: the existing web configuration of the same Firebase project
-//    (repository root firebase-applet-config.json) is exposed as the standard Firebase string
-//    resources, so FirebaseApp auto-initialises against the same project, database and bucket.
+//  * Fallback: the public web configuration of the same Firebase project (app/firebase-web-config.json,
+//    a copy of the web's firebase-applet-config.json so this folder builds on its own) is exposed as
+//    the standard Firebase string resources, so FirebaseApp initialises against the same project.
 // ---------------------------------------------------------------------------------------------
 val hasGoogleServicesJson = file("google-services.json").exists()
 if (hasGoogleServicesJson) {
@@ -24,7 +24,7 @@ if (hasGoogleServicesJson) {
 }
 
 @Suppress("UNCHECKED_CAST")
-val webFirebaseConfig: Map<String, Any?> = rootProject.file("../firebase-applet-config.json")
+val webFirebaseConfig: Map<String, Any?> = (file("firebase-web-config.json").takeIf { it.exists() } ?: rootProject.file("../firebase-applet-config.json"))
     .takeIf { it.exists() }
     ?.let { JsonSlurper().parse(it) as Map<String, Any?> }
     ?: emptyMap()
