@@ -1,0 +1,146 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // مشرف موثوق: بريد المالك أو claim إداري يضبطه السيرفر فقط (Admin SDK)
+    function isTrustedUploader() {
+      return isSignedIn() && (
+        request.auth.token.email == 'm774545471@gmail.com' ||
+        request.auth.token.admin == true ||
+        request.auth.token.appRole == 'admin'
+      );
+    }
+
+    function isImage() {
+      return request.resource.contentType is string && request.resource.contentType.matches('image/(jpeg|png|webp|gif|avif)');
+    }
+
+    function isVideo() {
+      return request.resource.contentType is string && request.resource.contentType.matches('video/(mp4|webm|quicktime)');
+    }
+
+    function isAudio() {
+      return request.resource.contentType is string &&
+        (request.resource.contentType.matches('audio/(mpeg|mp4|ogg|wav|webm)') ||
+         request.resource.contentType == 'audio/webm;codecs=opus');
+    }
+
+    function isMedia() {
+      return isImage() || isVideo() || isAudio();
+    }
+
+    // مسار آمن: بلا اجتياز مجلدات، وبطول معقول
+    function isSafeName() {
+      return request.resource.name.size() > 0 &&
+             request.resource.name.size() < 300 &&
+             !request.resource.name.contains('..') &&
+             !request.resource.name.contains('//');
+    }
+
+    // حجم قياسي لكل نوع
+    function fitsImage() { return request.resource.size > 0 && request.resource.size < 15 * 1024 * 1024; }
+    function fitsAudio() { return request.resource.size > 0 && request.resource.size < 25 * 1024 * 1024; }
+    function fitsChatMedia() { return request.resource.size > 0 && request.resource.size < 30 * 1024 * 1024; }
+    function fitsPostMedia() { return request.resource.size > 0 && request.resource.size < 50 * 1024 * 1024; }
+    function fitsReel() { return request.resource.size > 0 && request.resource.size < 150 * 1024 * 1024; }
+
+    // ============================================================
+    // وسائط المستخدم: الصور الرمزية والأغلفة ووسائط منشوراته
+    // (مسار الرفع الفعلي للتطبيق: users/{uid}/posts/{ts}_{rand}.{ext})
+    // القراءة عامة (محتوى منشورات عام) — الكتابة للمالك فقط وبقيود
+    // ============================================================
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isSafeName() && (
+        (isImage() && fitsImage()) ||
+        (isVideo() && fitsPostMedia()) ||
+        (isAudio() && fitsAudio())
+      );
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================================
+    // Posts media attachments — عامة القراءة، رفع المالك فقط
+    // ============================================================
+    match /posts/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsPostMedia();
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================================
+    // Stories (24h ephemeral media)
+    // ============================================================
+    match /stories/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isSafeName() && (isImage() || isVideo()) && fitsChatMedia();
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================================
+    // Reels (short videos)
+    // ============================================================
+    match /reels/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isSafeName() && isVideo() && fitsReel();
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================================
+    // Direct chat media — الرفع للمرسل فقط (مسار يحوي معرّفه)
+    // ------------------------------------------------------------
+    // حماية الخصوصية: القراءة المباشرة مقتصرة على صاحب الملف أو الأدمن
+    // بينما يحصل الطرف الآخر في المحادثة على رابط موقّع ومؤقت عبر
+    // دالة getChatMediaUrl التي تتحقق من العضوية الفعلية على السيرفر.
+    // ============================================================
+    match /chats/{chatId}/{userId}/{fileName} {
+      allow read: if isOwner(userId) || isTrustedUploader();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
+      allow delete: if isOwner(userId) || isTrustedUploader();
+    }
+
+    // ============================================================
+    // Group chat media — الرفع للعضو المرسل فقط (مساره يحوي معرّفه)
+    // القراءة المباشرة للمالك فقط، وأعضاء القروب عبر getChatMediaUrl
+    // ============================================================
+    match /groups/{groupId}/{userId}/{fileName} {
+      allow read: if isOwner(userId) || isTrustedUploader();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
+      allow delete: if isOwner(userId) || isTrustedUploader();
+    }
+
+    // ============================================================
+    // Community media — الرفع للمالك فقط، والقراءة المقيدة
+    // ============================================================
+    match /communities/{communityId}/{userId}/{fileName} {
+      allow read: if isOwner(userId) || isTrustedUploader();
+      allow write: if isOwner(userId) && isSafeName() && isMedia() && fitsChatMedia();
+      allow delete: if isOwner(userId) || isTrustedUploader();
+    }
+
+    // ============================================================
+    // Universal public assets & badges — رفع موثوق فقط (كان أي
+    // موقع يستطيع الرفع!) — الإدارة أو claim إداري من السيرفر
+    // ============================================================
+    match /assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isTrustedUploader() && isSafeName() &&
+        ((isImage() && fitsImage()) || (isVideo() && fitsPostMedia()));
+      allow delete: if isTrustedUploader();
+    }
+
+    // Default Deny for anything else
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

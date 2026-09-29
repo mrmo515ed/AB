@@ -6,31 +6,40 @@ plugins {
     alias(libs.plugins.animeblack.android.application)
     alias(libs.plugins.animeblack.android.compose)
     alias(libs.plugins.animeblack.hilt)
+    alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.firebase.perf)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Firebase configuration
-//  * Preferred: register the Android app (com.animeblack.app) in the Firebase console and drop the
-//    generated google-services.json into android/app/. The Google Services plugin is then applied.
-//  * Fallback: the public web configuration of the same Firebase project (app/firebase-web-config.json,
-//    a copy of the web's firebase-applet-config.json so this folder builds on its own) is exposed as
-//    the standard Firebase string resources, so FirebaseApp initialises against the same project.
+// Firebase configuration: app/google-services.json of the Firebase Android app com.animeblack.app.
+// The Google Services plugin generates google_app_id, gcm_defaultSenderId, project_id,
+// google_storage_bucket, google_api_key and default_web_client_id from it (no other source).
 // ---------------------------------------------------------------------------------------------
-val hasGoogleServicesJson = file("google-services.json").exists()
-if (hasGoogleServicesJson) {
-    apply(plugin = libs.plugins.google.services.get().pluginId)
+val googleServicesFile = file("google-services.json")
+check(googleServicesFile.exists()) {
+    "Missing android/app/google-services.json — download it from the Firebase console (Android app com.animeblack.app)."
 }
 
 @Suppress("UNCHECKED_CAST")
-val webFirebaseConfig: Map<String, Any?> = (file("firebase-web-config.json").takeIf { it.exists() } ?: rootProject.file("../firebase-applet-config.json"))
-    .takeIf { it.exists() }
-    ?.let { JsonSlurper().parse(it) as Map<String, Any?> }
-    ?: emptyMap()
+val googleServices = JsonSlurper().parse(googleServicesFile) as Map<String, Any?>
 
-fun firebaseValue(key: String, gradleProperty: String): String =
-    (providers.gradleProperty(gradleProperty).orNull ?: webFirebaseConfig[key]?.toString()).orEmpty()
+/** Web OAuth client (`client_type` 3) of the Firebase project: `serverClientId` for Google Sign-In. */
+@Suppress("UNCHECKED_CAST")
+fun googleWebClientId(packageName: String): String {
+    val clients = googleServices["client"] as? List<Map<String, Any?>> ?: return ""
+    val client = clients.firstOrNull { c ->
+        val info = c["client_info"] as? Map<String, Any?>
+        (info?.get("android_client_info") as? Map<String, Any?>)?.get("package_name") == packageName
+    } ?: return ""
+    val oauth = client["oauth_client"] as? List<Map<String, Any?>> ?: emptyList()
+    val appInvite = (client["services"] as? Map<String, Any?>)?.get("appinvite_service") as? Map<String, Any?>
+    val others = appInvite?.get("other_platform_oauth_client") as? List<Map<String, Any?>> ?: emptyList()
+    return (oauth + others).firstOrNull { (it["client_type"] as? Number)?.toInt() == 3 }?.get("client_id")?.toString().orEmpty()
+}
+
+/** R8 mapping upload needs Crashlytics enabled in the console; opt in with -Panimeblack.crashlyticsMappingUpload=true. */
+val crashlyticsMappingUpload = providers.gradleProperty("animeblack.crashlyticsMappingUpload").orNull == "true"
 
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -50,19 +59,11 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"${firebaseValue("firestoreDatabaseId", "animeblack.firestoreDatabaseId")}\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${firebaseValue("oAuthClientId", "animeblack.googleWebClientId")}\"")
+        // The new project uses the (default) Firestore database (Native mode).
+        buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"${providers.gradleProperty("animeblack.firestoreDatabaseId").orNull ?: "(default)"}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${providers.gradleProperty("animeblack.googleWebClientId").orNull ?: googleWebClientId("com.animeblack.app")}\"")
         buildConfigField("String", "API_BASE_URL", "\"${secret("animeblack.apiBaseUrl").orEmpty()}\"")
-        buildConfigField("boolean", "HAS_GOOGLE_SERVICES_JSON", hasGoogleServicesJson.toString())
-
-        if (!hasGoogleServicesJson) {
-            resValue("string", "google_app_id", firebaseValue("appId", "animeblack.firebaseAppId"))
-            resValue("string", "google_api_key", firebaseValue("apiKey", "animeblack.firebaseApiKey"))
-            resValue("string", "gcm_defaultSenderId", firebaseValue("messagingSenderId", "animeblack.firebaseSenderId"))
-            resValue("string", "project_id", firebaseValue("projectId", "animeblack.firebaseProjectId"))
-            resValue("string", "google_storage_bucket", firebaseValue("storageBucket", "animeblack.firebaseStorageBucket"))
-            resValue("string", "default_web_client_id", firebaseValue("oAuthClientId", "animeblack.googleWebClientId"))
-        }
+        buildConfigField("boolean", "HAS_GOOGLE_SERVICES_JSON", "true")
     }
 
     signingConfigs {
@@ -94,10 +95,9 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Without release credentials the release APK is produced unsigned (app-release-unsigned.apk).
             signingConfig = signingConfigs.findByName("release")
-            // Uploading R8 mapping files needs the registered Android app (google-services.json);
-            // otherwise the Crashlytics plugin cannot even create the upload task.
+            // Uploading R8 mapping files requires Crashlytics to be enabled in the Firebase console.
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = hasGoogleServicesJson
+                mappingFileUploadEnabled = crashlyticsMappingUpload
             }
         }
     }
@@ -114,9 +114,8 @@ android {
     }
 }
 
-// Mapping-file upload requires a registered Android app (google-services.json).
 tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureEach {
-    enabled = hasGoogleServicesJson
+    enabled = crashlyticsMappingUpload
 }
 
 dependencies {

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "233883926464",
+    "project_id": "animeblackapp-b6223",
+    "storage_bucket": "animeblackapp-b6223.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233883926464:android:13747ee836356f1bd21225",
+        "android_client_info": {
+          "package_name": "com.animeblack.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "233883926464-flgjv80lvr6le4k78stntgfbqmonh9n6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUtBMM4dRJ0376FGbwgjV6bB8DxKGNwbU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "233883926464-flgjv80lvr6le4k78stntgfbqmonh9n6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

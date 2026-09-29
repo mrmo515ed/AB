@@ -287,13 +287,15 @@ async function firebaseProbe() {
   const out = [];
   let cfg;
   try {
-    const own = path.join(ANDROID_DIR, "app", "firebase-web-config.json");
-    cfg = JSON.parse(fs.readFileSync(fs.existsSync(own) ? own : path.join(ROOT, "firebase-applet-config.json"), "utf8"));
+    const gs = JSON.parse(fs.readFileSync(path.join(ANDROID_DIR, "app", "google-services.json"), "utf8"));
+    const client = (gs.client || []).find((c) => c.client_info?.android_client_info?.package_name === "com.animeblack.app") || gs.client[0];
+    cfg = { apiKey: client.api_key[0].current_key, projectId: gs.project_info.project_id, authDomain: `${gs.project_info.project_id}.firebaseapp.com` };
+    out.push(`project: ${cfg.projectId} | app: ${client.client_info.mobilesdk_app_id} | oauth client types: ${(client.oauth_client || []).map((o) => o.client_type).join(",") || "none"}`);
   } catch (e) {
-    return `config: unreadable (${e})`;
+    return `google-services.json: unreadable (${e})`;
   }
   const key = cfg.apiKey;
-  const db = cfg.firestoreDatabaseId || "(default)";
+  const db = "(default)";
   const android = { "X-Android-Package": "com.animeblack.app", "X-Android-Cert": "4E3D7B4F5E12728AC2AE2130CD83E49D6D58CE9F" };
   const call = async (url, opts) => {
     try {
@@ -317,13 +319,15 @@ async function firebaseProbe() {
     const w = await signUp({ Referer: `https://${cfg.authDomain}/` });
     out.push(`guest sign-in (web referer): HTTP ${w.status} ${errOf(w)}`);
     token = w.json.idToken;
-    if (token) out.push("=> the API key only accepts web requests: register the Android app (google-services.json) or relax the key restriction.");
+    if (token) out.push("=> the API key rejects Android requests (check the key's application restrictions / SHA-1).");
   }
   const pw = await call(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
     method: "POST", headers: { "Content-Type": "application/json", ...android },
     body: JSON.stringify({ email: "probe-nonexistent@animeblack.invalid", password: "x-probe-123456", returnSecureToken: true }),
   });
   out.push(`e-mail provider (expect EMAIL_NOT_FOUND/INVALID_LOGIN_CREDENTIALS): HTTP ${pw.status} ${errOf(pw)}`);
+  const anon = await call(`https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${encodeURIComponent(db)}/documents/users?pageSize=1&mask.fieldPaths=name&key=${key}`, { headers: android });
+  out.push(`firestore ${db} unauthenticated read of users (403 = rules deny, 404 = database missing): HTTP ${anon.status} ${anon.status === 200 ? "OK" : errOf(anon)}`);
   if (token) {
     const fr = await call(`https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${encodeURIComponent(db)}/documents/users?pageSize=1&mask.fieldPaths=name`, {
       headers: { Authorization: `Bearer ${token}`, ...android },
