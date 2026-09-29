@@ -4,6 +4,13 @@ Project ID (from `google-services.json`): **animeblackapp-b6223**. The display n
 "animeblackapp", but the ID the SDK uses is `animeblackapp-b6223`.
 Android app: `1:233883926464:android:13747ee836356f1bd21225` (package `com.animeblack.app`).
 
+## 0. Probe results (CI, REST calls with Android headers)
+- Firestore `(default)`: **"The database (default) does not exist for project animeblackapp-b6223"**.
+  Check that the database was created in this project (the one whose Project settings show the ID
+  `animeblackapp-b6223` and number `233883926464`), not in another project.
+- Anonymous: disabled (`ADMIN_ONLY_OPERATION`). Email/Password: disabled (`PASSWORD_LOGIN_DISABLED`).
+- `google-services.json` has no Android OAuth client, so no SHA fingerprint is registered.
+
 ## 1. Authentication (Firebase console → Authentication → Sign-in method)
 - Enable **Google** (Google Sign-In).
 - Enable **Anonymous** (Quick start / guests) and **Email/Password** (e-mail accounts). Without these,

@@ -5,9 +5,11 @@
 > طريقة البناء، إعداد Firebase وتسجيل الدخول بـ Google، والقيود المعروفة موضحة أدناه.
 
 The web SPA (`index.html`) is untouched. The Android app is a separate Gradle build under `android/`
-that talks to the **same Firebase project** (`booming-rigging-gn50x`, named Firestore database
-`ai-studio-51245802-…`) with the **same collections, fields, Storage paths and Cloud Functions**, so
-web and Android users see each other's posts, chats, stories, groups and profiles in real time.
+that uses the Firebase project **animeblackapp-b6223** (Android app
+`1:233883926464:android:13747ee836356f1bd21225`, Firestore database `(default)`) with the **same
+collections, fields, Storage paths and Cloud Functions contracts** as the web app.
+*Note:* the web app still uses its previous Firebase project, so web and Android data are separate
+until the web is migrated as well (see `firebase-migration/`).
 
 ---
 
@@ -57,12 +59,9 @@ XML validity, apostrophes, placeholders, en/ar parity).
 
 ## 2. Firebase configuration
 
-* **Config source.** Preferred: register the Android app **`com.animeblack.app`** in the Firebase
-  console and put `google-services.json` in `android/app/`. Without it the build falls back to the
-  web config in `firebase-applet-config.json` (same project) via generated resources, so the APK works
-  out of the box. Values can be overridden with Gradle properties/env vars
-  (`animeblack.firebaseAppId`, `animeblack.googleWebClientId`, …).
-* **Firestore:** named database from the config, persistent cache (100 MB), realtime listeners with
+* **Config source:** `android/app/google-services.json` (project `animeblackapp-b6223`). The Google
+  Services plugin is always applied and the build fails if the file is missing; there is no fallback.
+* **Firestore:** `(default)` database, persistent cache (100 MB), realtime listeners with
   retry/backoff, server timestamps where the rules/web expect them.
 * **App Check:** Play Integrity in release, debug provider in debug builds (register the debug token
   printed in Logcat under *App Check → Manage debug tokens*). Enforce only after the Android app is
@@ -75,24 +74,17 @@ XML validity, apostrophes, placeholders, en/ar parity).
   `announcement_banner` (safe defaults in-app; the app never blocks on a fetch).
 * **Crashlytics / Performance / Analytics** are wired; users can opt out in Settings → Diagnostics.
 
-### What works without `google-services.json` (verified on an emulator)
-The fallback uses the **web** app id. Firebase Auth/Firestore/Storage/Functions talk to the same
-project, but Firebase **Analytics, Crashlytics and Sessions disable themselves** ("Invalid
-google_app_id … web:…" in Logcat) and App Check cannot attest the app. If the web API key is
-restricted to HTTP referrers in Google Cloud, Android requests are rejected as well. Registering the
-Android app (§3) and adding its `google-services.json` fixes all of these.
-
-### Firebase console checklist (probe results)
-CI runs `[firebase-probe]`, which makes REST calls with Android headers. Latest result:
+### Firebase console checklist (probe of `animeblackapp-b6223`, run by CI with Android headers)
 
 | Check | Result | Action |
 | --- | --- | --- |
-| Anonymous provider (guests / quick start) | `ADMIN_ONLY_OPERATION` → **disabled** | Authentication → Sign-in method → **Anonymous → Enable** |
-| E-mail/password provider | `PASSWORD_LOGIN_DISABLED` → **disabled** (web e-mail login is affected too) | Authentication → Sign-in method → **Email/Password → Enable** |
-| API key accepts Android requests | yes | — |
+| App registration in `google-services.json` | project `animeblackapp-b6223`, app `1:233883926464:android:13747ee836356f1bd21225` | — |
+| Firestore `(default)` database | **NOT FOUND**: "The database (default) does not exist for project animeblackapp-b6223" | Create it in *this* project (Firestore → Create database, Native mode), or confirm the project used |
+| Anonymous provider (quick start / guests) | `ADMIN_ONLY_OPERATION` → **disabled** | Authentication → Sign-in method → **Anonymous → Enable** |
+| E-mail/password provider | `PASSWORD_LOGIN_DISABLED` → **disabled** | Authentication → Sign-in method → **Email/Password → Enable** |
+| Android OAuth client (SHA fingerprints) | only the web client (type 3) present | Add the SHA-1/SHA-256 from §3, then download `google-services.json` again |
 
-Until one of these providers is enabled, quick start shows "Guest access is not enabled for this
-project yet", and only Google sign-in works (it also needs the SHA fingerprints from §3).
+All manual steps, including rules/index deployment, are in `firebase-migration/DEPLOY.md`.
 
 ## 3. Google Sign-In (Credential Manager)
 
@@ -106,7 +98,7 @@ for a Firebase credential, so existing web accounts sign in to the *same* uid. S
      * SHA-256 `5A:52:7E:23:6B:D0:73:1D:85:FD:9A:F4:E4:C0:B3:0F:00:20:3B:93:62:5F:CE:20:62:BA:9E:14:A3:2E:A1:94`
    * your release key (and the Play App Signing key if you publish on Play).
 3. Keep **Google** enabled under Authentication → Sign-in method. The *Web client ID*
-   (`oAuthClientId` in the web config) is used as `serverClientId`.
+   (the web OAuth client, `client_type` 3, in `google-services.json`) is used as `serverClientId`.
 4. Download the new `google-services.json` into `android/app/` (optional but recommended).
 
 Handled cases: user cancellation, no credential on device, invalid/expired token, network errors,
@@ -182,7 +174,7 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 ## 6. Security review (summary)
 
 * No private server keys in the APK (Gemini key stays on the Node server; only the public Firebase
-  web config is embedded, as on the web).
+  client configuration from `google-services.json` is embedded).
 * **Firestore rules fixes (additive, web-compatible):**
   * new user documents are capped to the starter economy the clients actually write
     (coins ≤ 300, stars ≤ 15, reputation ≤ 30, level 1, no xp/gems) — previously a client could

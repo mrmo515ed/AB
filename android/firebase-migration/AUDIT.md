@@ -1,18 +1,22 @@
 # Firebase migration audit (Step 1 — before any change)
 
+> Historical record written before the migration. After the migration the old configuration file was
+> deleted, and the old identifiers are abbreviated here on purpose, so the code base contains no
+> reference to the old project.
+
 Target: Firebase project **animeblackapp** (project number 233883926464), Android app
 `1:233883926464:android:13747ee836356f1bd21225`, package **com.animeblack.app**, Firestore `(default)`.
-Old: project `booming-rigging-gn50x` with the named Firestore database
-`ai-studio-51245802-6d4e-4feb-bd11-43162af66618` (used through the web configuration).
+Old: project `the old project (booming-…)` with the named Firestore database
+`ai-studio-51245802-… (old named database)` (used through the web configuration).
 
 ## 1. Where the old Firebase project is referenced (Android project only)
 
 | File | Reference |
 | --- | --- |
-| `android/app/firebase-web-config.json` | Full old **web** config: projectId `booming-rigging-gn50x`, appId `1:914243738562:web:…`, apiKey, authDomain, storageBucket, messagingSenderId `914243738562`, **firestoreDatabaseId `ai-studio-51245802-6d4e-4feb-bd11-43162af66618`**, oAuthClientId `914243738562-…apps.googleusercontent.com` |
+| `android/app/firebase-web-config.json` | Full old **web** config: projectId `the old project (booming-…)`, appId the old web app id, apiKey, authDomain, storageBucket, messagingSenderId, **firestoreDatabaseId `ai-studio-51245802-… (old named database)`**, oAuthClientId (old OAuth client) |
 | `android/app/build.gradle.kts` | Reads `firebase-web-config.json`, or else the web's `../firebase-applet-config.json` at the repo root, and turns it into `google_app_id`, `google_api_key`, `gcm_defaultSenderId`, `project_id`, `google_storage_bucket`, `default_web_client_id` resources plus the `FIRESTORE_DATABASE_ID` and `GOOGLE_WEB_CLIENT_ID` BuildConfig fields. |
 | `android/scripts/ci-android.mjs` | `[firebase-probe]` reads the same web config (API key, project, database). |
-| `android/MIGRATION.md` | Documentation mentions project `booming-rigging-gn50x` and the named database. |
+| `android/MIGRATION.md` | Documentation mentions project `the old project (booming-…)` and the named database. |
 
 No Kotlin source hardcodes an old project value. There is no `google-services.json` in the project
 today, so the Google Services plugin is **not applied**.

@@ -1,7 +1,7 @@
 # Anime Black — Android app (native)
 
 Kotlin + Jetpack Compose app for Anime Black. This folder is **self-contained** (its own Gradle
-build, Firebase config copy in `app/firebase-web-config.json`, CI driver and docs) and does not
+build, Firebase config in `app/google-services.json` — project `animeblackapp-b6223`, CI driver and docs) and does not
 depend on the web files, so it can live in its own repository.
 
 - Build: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37) — details in [MIGRATION.md](MIGRATION.md).
