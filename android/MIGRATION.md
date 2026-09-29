@@ -82,6 +82,18 @@ google_app_id … web:…" in Logcat) and App Check cannot attest the app. If th
 restricted to HTTP referrers in Google Cloud, Android requests are rejected as well. Registering the
 Android app (§3) and adding its `google-services.json` fixes all of these.
 
+### Firebase console checklist (probe results)
+CI runs `[firebase-probe]`, which makes REST calls with Android headers. Latest result:
+
+| Check | Result | Action |
+| --- | --- | --- |
+| Anonymous provider (guests / quick start) | `ADMIN_ONLY_OPERATION` → **disabled** | Authentication → Sign-in method → **Anonymous → Enable** |
+| E-mail/password provider | `PASSWORD_LOGIN_DISABLED` → **disabled** (web e-mail login is affected too) | Authentication → Sign-in method → **Email/Password → Enable** |
+| API key accepts Android requests | yes | — |
+
+Until one of these providers is enabled, quick start shows "Guest access is not enabled for this
+project yet", and only Google sign-in works (it also needs the SHA fingerprints from §3).
+
 ## 3. Google Sign-In (Credential Manager)
 
 Google sign-in uses **Credential Manager + Google Identity (`googleid`)** and exchanges the ID token
@@ -99,6 +111,22 @@ for a Firebase credential, so existing web accounts sign in to the *same* uid. S
 
 Handled cases: user cancellation, no credential on device, invalid/expired token, network errors,
 account switching (saved accounts, no passwords stored), sign-out (clears Credential Manager state).
+
+### Quick start & guest accounts
+The sign-in screen starts with **Quick start**: a name and a username, then straight into the app.
+It signs in with a real Firebase **anonymous** account, so the existing rules (`request.auth != null`)
+give guests the same abilities as registered users: posting, chats, groups, reels, economy.
+If the Anonymous provider is disabled in the Firebase console, the app falls back to a device-bound
+account on an undeliverable `@guest.animeblack.invalid` address (RFC 2606), so password-reset
+e-mails can never be used to take it over. Enabling **Authentication → Sign-in method → Anonymous**
+is recommended.
+Guests are not stored in the account switcher. Settings offers **Save with e-mail** or **Link a
+Google account**, which keeps the same uid and all data. Signing out warns that a guest account
+cannot be recovered.
+
+*Security note:* because guests have full access, one person can create many guest accounts
+(e.g. to farm the daily reward and transfer coins). Mitigations: enforce App Check, and/or reject
+`sign_in_provider == "anonymous"` in the `economyTransfer` / `claimDailyReward` functions.
 
 ## 4. Release signing
 
@@ -173,7 +201,7 @@ feature/*                auth, home (feed/posts/stories/camera), community (grou
 
 | Area | Native status |
 | --- | --- |
-| Auth: e-mail, Google, reset, verification, complete profile, account switcher, delete account | ✅ |
+| Auth: quick start (name + username, instant entry), guests with upgrade to e-mail/Google, e-mail, Google, reset, verification, complete profile, account switcher, delete account | ✅ |
 | Home feed (realtime + pagination), post detail, comments, reactions, polls, saves, shares, edit/delete, drafts, share-target, stickers & GIFs as post media | ✅ |
 | Stories: viewer, create (text/photo/video, close friends), reactions, replies, views | ✅ (archive ❌) |
 | Reels: vertical player, likes, comments, share, create (pick/record), delete | ✅ (advanced studio ❌) |

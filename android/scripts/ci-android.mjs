@@ -416,6 +416,80 @@ function collectTestResults() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Signed-in tour on the emulator: quick start (name + username) → visit every bottom tab →
+ * Settings → delete the test account (profile, user state and auth user) so nothing is left behind.
+ */
+async function signedInTour(adb, pid) {
+  const lines = [];
+  const dump = () => {
+    sh(`${adb} shell uiautomator dump /sdcard/ui.xml`);
+    return sh(`${adb} shell cat /sdcard/ui.xml`);
+  };
+  const nodes = (xml) => [...xml.matchAll(/<node [^>]*>/g)].map((m) => {
+    const t = m[0];
+    const attr = (n) => (t.match(new RegExp(` ${n}="([^"]*)"`)) || [])[1] || "";
+    const b = attr("bounds").match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+    return { text: attr("text"), desc: attr("content-desc"), cx: b ? Math.round((+b[1] + +b[3]) / 2) : 0, cy: b ? Math.round((+b[2] + +b[4]) / 2) : 0 };
+  });
+  const texts = (xml) => [...new Set(nodes(xml).map((n) => n.text || n.desc).filter((x) => x && x.trim()))].slice(0, 30).join(" | ").slice(0, 600);
+  const tap = async (xml, ...labels) => {
+    const n = nodes(xml).find((x) => labels.some((l) => x.text === l || x.desc === l));
+    if (!n) return false;
+    sh(`${adb} shell input tap ${n.cx} ${n.cy}`);
+    await sleep(1500);
+    return true;
+  };
+  sh(`${adb} shell cmd locale set-app-locales com.animeblack.app --locales en`);
+  sh(`${adb} shell am force-stop com.animeblack.app; ${adb} shell am start -W -n com.animeblack.app/.MainActivity`);
+  await sleep(12000);
+  let xml = dump();
+  const handle = `cismoke${String(process.env.GITHUB_RUN_ID || Date.now()).slice(-6)}`;
+  if (!(await tap(xml, "Your name"))) {
+    lines.push(`quick start form not found: ${texts(xml)}`);
+    return lines;
+  }
+  sh(`${adb} shell input text "CI%sSmoke"`);
+  xml = dump();
+  await tap(xml, "Username (letters, numbers, _ .)");
+  sh(`${adb} shell input text "${handle}"`);
+  sh(`${adb} shell input keyevent 4`);
+  await sleep(1000);
+  xml = dump();
+  await tap(xml, "Enter now");
+  await sleep(22000);
+  xml = dump();
+  lines.push(`after quick start: ${texts(xml)}`);
+  const signedIn = nodes(xml).some((n) => n.text === "Home" || n.desc === "Home");
+  lines.push(`signed in: ${signedIn}`);
+  if (!signedIn) return lines;
+  for (const tab of ["Community", "Chat", "Reels", "More"]) {
+    xml = dump();
+    await tap(xml, tab);
+    await sleep(5000);
+    xml = dump();
+    lines.push(`tab ${tab} (pid ${pid()}): ${texts(xml)}`);
+  }
+  xml = dump();
+  if (await tap(xml, "Settings")) {
+    await sleep(3000);
+    for (let i = 0; i < 8; i++) sh(`${adb} shell input swipe 540 1900 540 500 250`);
+    await sleep(1500);
+    xml = dump();
+    if (await tap(xml, "Delete account")) {
+      await sleep(1500);
+      xml = dump();
+      await tap(xml, "Confirm");
+      await sleep(8000);
+      xml = dump();
+      lines.push(`after deleting the test account: ${texts(xml)}`);
+    } else {
+      lines.push(`delete button not found: ${texts(xml)}`);
+    }
+  }
+  return lines;
+}
+
 /** Boots an emulator, installs + launches the APK and reports what happened. */
 async function smokeTest(apkPath, releaseApk = null) {
   const t0 = Date.now();
@@ -472,6 +546,9 @@ async function smokeTest(apkPath, releaseApk = null) {
   sh(`${adb} shell am start -W -a android.intent.action.VIEW -d "animeblack://post/p_test" com.animeblack.app`);
   await sleep(8000);
   summary.push(`pid after deep link: ${pid()}`);
+  if (process.env.ANIMEBLACK_SMOKE_LOGIN !== "0") {
+    for (const line of await signedInTour(adb, pid)) summary.push(line);
+  }
   if (releaseApk) {
     // R8-minified build (already signed with the debug key for testing).
     const signed = releaseApk;
