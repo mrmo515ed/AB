@@ -403,7 +403,34 @@ async function publishToFileHosts(file, name) {
   const data = fs.readFileSync(file);
   const attempts = [];
 
-  // 1) transfer.sh (simple PUT, direct link)
+  // 1) pixeldrain (PUT, stable link, direct download endpoint)
+  try {
+    const r = await fetch("https://pixeldrain.com/api/file/", { method: "PUT", body: data });
+    const text = r.ok ? await r.text() : "";
+    if (r.ok) {
+      const id = (() => { try { return JSON.parse(text).id; } catch { return ""; } })();
+      if (id) return { ok: true, text: `https://pixeldrain.com/u/${id}` };
+    }
+    attempts.push(`pixeldrain: HTTP ${r.status} ${text.slice(0, 120)}`);
+  } catch (e) {
+    attempts.push(`pixeldrain: ${e.message}`);
+  }
+
+  // 2) gofile.io (free file host, returns a download page)
+  try {
+    const servers = await (await fetch("https://api.gofile.io/servers")).json();
+    const server = servers?.data?.servers?.[0]?.name || "store1";
+    const form = new FormData();
+    form.append("file", new Blob([data]), name);
+    const r = await fetch(`https://${server}.gofile.io/contents/uploadfile`, { method: "POST", body: form });
+    const json = r.ok ? await r.json() : null;
+    if (json?.data?.downloadPage && json.status === "ok") return { ok: true, text: json.data.downloadPage };
+    attempts.push(`gofile: HTTP ${r.status} ${JSON.stringify(json).slice(0, 120)}`);
+  } catch (e) {
+    attempts.push(`gofile: ${e.message}`);
+  }
+
+  // 3) transfer.sh (simple PUT, direct link)
   try {
     const r = await fetch(`https://transfer.sh/${encodeURIComponent(name)}`, { method: "PUT", body: data });
     const text = r.ok ? (await r.text()).trim() : "";
@@ -413,7 +440,7 @@ async function publishToFileHosts(file, name) {
     attempts.push(`transfer.sh: ${e.message}`);
   }
 
-  // 2) 0x0.st (POST form, direct file link)
+  // 4) 0x0.st (POST form, direct file link)
   try {
     const form = new FormData();
     form.append("file", new Blob([data]), name);
@@ -423,19 +450,6 @@ async function publishToFileHosts(file, name) {
     attempts.push(`0x0.st: HTTP ${r.status} ${text.slice(0, 120)}`);
   } catch (e) {
     attempts.push(`0x0.st: ${e.message}`);
-  }
-
-  // 3) catbox.moe
-  try {
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", new Blob([data]), name);
-    const r = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form });
-    const text = r.ok ? (await r.text()).trim() : "";
-    if (r.ok && text.startsWith("http")) return { ok: true, text };
-    attempts.push(`catbox: HTTP ${r.status} ${text.slice(0, 120)}`);
-  } catch (e) {
-    attempts.push(`catbox: ${e.message}`);
   }
 
   return { ok: false, text: attempts.join(" | ") };
