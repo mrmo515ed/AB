@@ -55,14 +55,12 @@ class AgentApi @Inject constructor(
 
     suspend fun currentBaseUrl(): String = config.effectiveApiBaseUrl(settings.current().apiBaseUrlOverride)
 
-    /** The URL the user typed in Settings (empty when the build-time value is used). */
-    suspend fun overrideUrl(): String = settings.current().apiBaseUrlOverride
-
     /** Cheap reachability probe used by the settings screen (`GET /api/health`). */
-    suspend fun health(url: String = currentBaseUrl()): Boolean = withContext(io) {
-        if (!isConfigured(url)) return@withContext false
+    suspend fun health(url: String? = null): Boolean = withContext(io) {
+        val target = url?.trim()?.trimEnd('/').takeUnless { it.isNullOrEmpty() } ?: currentBaseUrl()
+        if (!isConfigured(target)) return@withContext false
         runCatching {
-            client.newCall(Request.Builder().url("$url/api/health").get().build()).execute().use { it.isSuccessful }
+            client.newCall(Request.Builder().url("$target/api/health").get().build()).execute().use { it.isSuccessful }
         }.getOrDefault(false)
     }
 
@@ -88,7 +86,7 @@ class AgentApi @Inject constructor(
                 .post(body)
                 .build()
         } catch (e: IllegalArgumentException) {
-            throw AppErrorException(AppError.Validation("agent", "invalid-server-url", e))
+            throw AppErrorException(AppError.Validation("agent", "invalid-server-url"))
         }
         client.newCall(request).execute().use { response ->
             val root = runCatching { json.parseToJsonElement(response.body.string()).jsonObject }.getOrNull() ?: JsonObject(emptyMap())
