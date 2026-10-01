@@ -56,7 +56,8 @@ The app calls `claimDailyReward`, `economyTransfer` and `getChatMediaUrl` (regio
 Chat/group push notifications are sent by `onChatMessageCreated` / `onGroupMessageCreated`. These
 exist only in the old project. Until they are deployed to `animeblackapp-b6223` (Blaze plan
 required), the daily reward, coin transfers and chat pushes return errors or do not arrive.
-The functions currently target the old named database and must be pointed to `(default)` first.
+The functions default to the `(default)` database; when deploying this same source to the legacy web
+project instead, set `FIRESTORE_DB_ID` to that project's named database.
 
 ## 6. Cloud Messaging
 No console action is needed for the app to receive a token (FCM is enabled with the project). Tokens

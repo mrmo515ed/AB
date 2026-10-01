@@ -5,9 +5,10 @@
  * + روابط وسائط موقّعة بتحقق عضوية.
  *
  * ملاحظات النشر (راجع تقرير PR2):
- *  - قاعدة البيانات المسماة ai-studio-… هي نفسها التي يستخدمها التطبيق.
+ *  - القاعدة الافتراضية هي (default) في مشروع الأندرويد الجديد animeblackapp-b6223.
  *  - النشر: `cd functions && npm install && npm run deploy`
- *  - متغير البيئة الاختياري FIRESTORE_DB_ID لتغيير القاعدة.
+ *  - لنشر هذه الدوال إلى مشروع الويب القديم (صاحب القاعدة المسماة) اضبط متغير البيئة
+ *    FIRESTORE_DB_ID على معرّف قاعدة ذلك المشروع قبل النشر.
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -23,7 +24,7 @@ import {
   computeLevel
 } from './economyValidation';
 
-const DB_ID = process.env.FIRESTORE_DB_ID || 'ai-studio-51245802-6d4e-4feb-bd11-43162af66618';
+const DB_ID = process.env.FIRESTORE_DB_ID || '(default)';
 const ADMIN_EMAILS = ['m774545471@gmail.com'];
 
 const adminApp = initializeApp();
