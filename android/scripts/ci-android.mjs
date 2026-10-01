@@ -394,8 +394,54 @@ async function publishRelease(files, notes) {
   return { ok: links.every((l) => l.startsWith("https://")), text: links.join("\n") };
 }
 
-/** Recursively collects JUnit XML results from every module. */
-function collectTestResults() {
+/**
+ * Publishes an APK to an anonymous file host so the owner gets a permanent download link even
+ * without GitHub release permissions. Tries a few services and returns the first link that works.
+ * Nothing is uploaded unless the commit message asks for it ([android-publish] / [android-upload]).
+ */
+async function publishToFileHosts(file, name) {
+  const data = fs.readFileSync(file);
+  const attempts = [];
+
+  // 1) transfer.sh (simple PUT, direct link)
+  try {
+    const r = await fetch(`https://transfer.sh/${encodeURIComponent(name)}`, { method: "PUT", body: data });
+    const text = r.ok ? (await r.text()).trim() : "";
+    if (r.ok && text.startsWith("http")) return { ok: true, text };
+    attempts.push(`transfer.sh: HTTP ${r.status}`);
+  } catch (e) {
+    attempts.push(`transfer.sh: ${e.message}`);
+  }
+
+  // 2) 0x0.st (POST form, direct file link)
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([data]), name);
+    const r = await fetch("https://0x0.st", { method: "POST", body: form });
+    const text = r.ok ? (await r.text()).trim() : "";
+    if (r.ok && text.startsWith("http")) return { ok: true, text };
+    attempts.push(`0x0.st: HTTP ${r.status} ${text.slice(0, 120)}`);
+  } catch (e) {
+    attempts.push(`0x0.st: ${e.message}`);
+  }
+
+  // 3) catbox.moe
+  try {
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", new Blob([data]), name);
+    const r = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form });
+    const text = r.ok ? (await r.text()).trim() : "";
+    if (r.ok && text.startsWith("http")) return { ok: true, text };
+    attempts.push(`catbox: HTTP ${r.status} ${text.slice(0, 120)}`);
+  } catch (e) {
+    attempts.push(`catbox: ${e.message}`);
+  }
+
+  return { ok: false, text: attempts.join(" | ") };
+}
+
+/** Recursively collects JUnit XML results from every module. */function collectTestResults() {
   const out = { suites: 0, tests: 0, failures: 0, errors: 0, skipped: 0, failed: [] };
   const walk = (dir, depth) => {
     if (depth > 6 || !fs.existsSync(dir)) return;
@@ -672,6 +718,12 @@ async function main() {
       const pub = await publishRelease(files, "AnimeBlack.apk: optimised build signed with the shared debug key (testing only).\nAnimeBlack-debug.apk: debuggable build.");
       annotate(pub.ok ? "notice" : "warning", "android-publish", pub.text);
       report.push("## Publish", "```", pub.text, "```", "");
+      // Fallback with no GitHub permissions needed: upload to an anonymous file host.
+      if (!pub.ok && files.length) {
+        const hosted = await publishToFileHosts(files[0].path, files[0].name);
+        annotate(hosted.ok ? "notice" : "warning", "android-upload", hosted.text);
+        report.push("## Download link (anonymous host)", hosted.ok ? hosted.text : "```" + hosted.text + "```", "");
+      }
     }
     if (wantApk && res.ok) {
       const apkOut = path.join(ANDROID_DIR, "apk");
@@ -680,6 +732,15 @@ async function main() {
         const dst = path.join(apkOut, a.file);
         fs.copyFileSync(a.src, dst);
         pushFiles.push(dst);
+      }
+      // Tester APK inside the repository (direct download link, no release permissions needed).
+      const debugApk = apks.find((a) => a.kind === "debug");
+      const preferred = testSigned || (debugApk ? debugApk.src : null);
+      if (preferred) {
+        const testerOut = path.join(ANDROID_DIR, "tester", "AnimeBlack.apk");
+        fs.mkdirSync(path.dirname(testerOut), { recursive: true });
+        fs.copyFileSync(preferred, testerOut);
+        pushFiles.push(testerOut);
       }
     }
     pushFiles.push(path.join(REPORT_DIR, "build.log"));

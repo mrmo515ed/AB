@@ -4,7 +4,11 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "android/tester/**",
+      "android/apk/**",
+      "android/**/build/**",
+      "dist/**"
     ],
     "rewrites": [
       {
