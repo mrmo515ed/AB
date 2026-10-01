@@ -57,6 +57,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.animeblack.core.common.config.AppConfig
 import com.animeblack.core.common.result.AppResult
+import com.animeblack.core.data.remote.AgentApi
 import com.animeblack.core.data.repository.AuthRepository
 import com.animeblack.core.data.repository.SessionRepository
 import com.animeblack.core.data.repository.SyncRepository
@@ -85,6 +86,7 @@ import com.animeblack.core.navigation.LegalDocuments
 import com.animeblack.core.navigation.LegalRoute
 import com.animeblack.core.navigation.PrivacySettingsRoute
 import com.animeblack.core.navigation.SecurityRoute
+import com.animeblack.core.navigation.ServerConfigRoute
 import com.animeblack.core.navigation.SettingsRoute
 import com.animeblack.core.navigation.SyncDiagnosticsRoute
 import com.animeblack.core.ui.AppLocale
@@ -112,6 +114,7 @@ class SettingsViewModel @Inject constructor(
     private val auth: AuthRepository,
     private val sessions: SessionRepository,
     private val sync: SyncRepository,
+    private val agent: AgentApi,
     val config: AppConfig,
 ) : ViewModel() {
     val appSettings: StateFlow<AppSettings> = settings.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
@@ -179,7 +182,53 @@ class SettingsViewModel @Inject constructor(
     fun retryFailed() = viewModelScope.launch { sync.retryFailed() }
     fun forceResync() = viewModelScope.launch { handle(sync.forceResync(), R.string.set_resynced) }
     fun signOut() = viewModelScope.launch { auth.signOut() }
-    fun deleteAccount() = viewModelScope.launch { handle(auth.deleteAccount()) }
+
+    /** Deletes the account; when Firebase requires a fresh login, [reauthenticate] is used first. */
+    fun deleteAccount(activityContext: Context?) = viewModelScope.launch {
+        var result = auth.deleteAccount(activityContext)
+        val error = (result as? AppResult.Failure)?.error
+        if (error is com.animeblack.core.common.result.AppError.Auth && error.code == "requires-recent-login") {
+            when (val reauth = auth.reauthenticate(activityContext)) {
+                is AppResult.Success -> result = auth.deleteAccount(activityContext)
+                is AppResult.Failure -> {
+                    handle(reauth)
+                    return@launch
+                }
+            }
+        }
+        handle(result)
+    }
+
+    // ------------------------------------------------------------------ Server (AI agent)
+
+    /** Base URL currently in effect (in-app override, else build-time value). */
+    val serverBaseUrl: StateFlow<String> = agent.baseUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), config.effectiveApiBaseUrl(""))
+
+    /** The raw in-app override (empty = the build-time value is used). */
+    val serverOverride: StateFlow<String> = settings.settings
+        .map { it.apiBaseUrlOverride }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val serverTesting = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun saveServerUrl(url: String) = viewModelScope.launch {
+        val clean = url.trim().trimEnd('/')
+        if (clean.isNotEmpty() && !config.isUsableServerUrl(clean)) {
+            _messages.tryEmit(R.string.set_server_invalid)
+            return@launch
+        }
+        settings.update { it.copy(apiBaseUrlOverride = clean) }
+        _messages.tryEmit(if (clean.isEmpty()) R.string.set_server_reset else R.string.set_server_saved)
+    }
+
+    fun testServerUrl(url: String) = viewModelScope.launch {
+        serverTesting.value = true
+        val clean = url.trim().trimEnd('/')
+        val reachable = agent.health(clean)
+        serverTesting.value = false
+        _messages.tryEmit(if (reachable) R.string.set_server_ok else R.string.set_server_fail)
+    }
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -287,6 +336,7 @@ fun SettingsScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Setti
                 SwitchRow(AbIcons.Analytics, stringResource(R.string.set_analytics), null, s.analyticsEnabled) { v -> viewModel.update { it.copy(analyticsEnabled = v) } }
                 SwitchRow(AbIcons.BugReport, stringResource(R.string.set_crash), null, s.crashReportsEnabled) { v -> viewModel.update { it.copy(crashReportsEnabled = v) } }
                 LinkRow(AbIcons.Sync, stringResource(R.string.set_sync)) { navigate(SyncDiagnosticsRoute) }
+                LinkRow(AbIcons.Dns, stringResource(R.string.set_server)) { navigate(ServerConfigRoute) }
             }
 
             SectionHeader(stringResource(R.string.set_legal))
@@ -354,7 +404,8 @@ fun SettingsScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Setti
             message = stringResource(R.string.set_delete_confirm),
             onConfirm = {
                 confirmDelete = false
-                viewModel.deleteAccount()
+                // An old session makes Firebase ask for a fresh login; the screen handles that.
+                viewModel.deleteAccount(context.findActivity())
             },
             onDismiss = { confirmDelete = false },
             destructive = true,
@@ -512,7 +563,14 @@ fun SyncDiagnosticsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hil
             return@Scaffold
         }
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val serverUrl by viewModel.serverBaseUrl.collectAsStateWithLifecycle()
             SettingsCard {
+                StatusRow(
+                    stringResource(R.string.set_server),
+                    serverUrl.ifBlank { stringResource(R.string.set_server_none) },
+                    if (viewModel.config.isUsableServerUrl(serverUrl)) AbColors.Emerald else AbColors.TextSecondary,
+                )
+                HorizontalDivider(color = AbColors.Line2)
                 StatusRow(stringResource(R.string.set_online), stringResource(if (st.online) R.string.set_connected else R.string.set_offline), if (st.online) AbColors.Emerald else AbColors.Rose)
                 HorizontalDivider(color = AbColors.Line2)
                 StatusRow(stringResource(R.string.set_backend), stringResource(if (st.backendReachable) R.string.set_reachable else R.string.set_unreachable), if (st.backendReachable) AbColors.Emerald else AbColors.Orange)
@@ -525,6 +583,52 @@ fun SyncDiagnosticsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hil
             }
             GradientButton(stringResource(R.string.set_retry_failed), onClick = { viewModel.retryFailed() }, enabled = st.failedOutbox > 0, icon = AbIcons.Refresh, modifier = Modifier.fillMaxWidth())
             GlassButton(stringResource(R.string.set_force_resync), onClick = { viewModel.forceResync() }, icon = AbIcons.Sync, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+// ============================================================================ AI server address
+
+@Composable
+fun ServerConfigScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+    val snackbar = rememberMessages(viewModel)
+    val override by viewModel.serverOverride.collectAsStateWithLifecycle()
+    val effective by viewModel.serverBaseUrl.collectAsStateWithLifecycle()
+    val testing by viewModel.serverTesting.collectAsStateWithLifecycle()
+    var input by remember { mutableStateOf("") }
+    LaunchedEffect(override) { input = override }
+
+    Scaffold(topBar = { AbTopBar(title = stringResource(R.string.set_server_title), onBack = onBack) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.set_server_body), color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+            SettingsCard {
+                StatusRow(
+                    stringResource(R.string.set_server_current),
+                    effective.ifBlank { stringResource(R.string.set_server_none) },
+                    if (viewModel.config.isUsableServerUrl(effective)) AbColors.Emerald else AbColors.Orange,
+                )
+            }
+            AbTextField(
+                value = input,
+                onValueChange = { input = it },
+                label = stringResource(R.string.set_server),
+                placeholder = stringResource(R.string.set_server_hint),
+                leadingIcon = AbIcons.Dns,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            GradientButton(stringResource(R.string.set_server_save), onClick = { viewModel.saveServerUrl(input) }, icon = AbIcons.Check, modifier = Modifier.fillMaxWidth())
+            GlassButton(
+                text = if (testing) stringResource(R.string.set_server_testing) else stringResource(R.string.set_server_test),
+                onClick = { viewModel.testServerUrl(input) },
+                icon = AbIcons.WifiOff,
+                enabled = !testing,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (override.isNotBlank()) {
+                TextButton(onClick = { viewModel.saveServerUrl("") }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.set_server_reset))
+                }
+            }
         }
     }
 }
@@ -558,5 +662,6 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
     composable<SecurityRoute> { SecurityScreen(back) }
     composable<BlockedUsersRoute> { BlockedUsersScreen(back, openProfile = { navController.navigate(com.animeblack.core.navigation.ProfileRoute(it)) }) }
     composable<SyncDiagnosticsRoute> { SyncDiagnosticsScreen(back) }
+    composable<ServerConfigRoute> { ServerConfigScreen(back) }
     composable<LegalRoute> { entry -> LegalScreen(entry.toRoute<LegalRoute>().document, back) }
 }

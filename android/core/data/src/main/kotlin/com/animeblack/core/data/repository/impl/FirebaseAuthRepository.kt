@@ -278,6 +278,7 @@ class FirebaseAuthRepository @Inject constructor(
         val guest = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
         if (!guest.isGuestUser()) throw AppErrorException(AppError.Validation("account", "not-guest"))
         val cleanEmail = email.trim()
+        pendingPassword = password // memory only, used for a later re-authentication
         val linked = if (guest.isAnonymous) {
             guest.linkWithCredential(EmailAuthProvider.getCredential(cleanEmail, password)).await().user ?: guest
         } else {
@@ -349,6 +350,7 @@ class FirebaseAuthRepository @Inject constructor(
 
     override suspend fun signInWithEmail(email: String, password: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         auth.signInWithEmailAndPassword(email.trim(), password).await()
+        pendingPassword = password // memory only, used for a later re-authentication
         analytics.logEvent("login", mapOf("method" to "password"))
     }
 
@@ -401,7 +403,24 @@ class FirebaseAuthRepository @Inject constructor(
         auth.signOut()
     }
 
-    override suspend fun deleteAccount(): AppResult<Unit> = runCatchingApp(errorMapper) {
+    /**
+     * Deletes the account and its profile documents. When Firebase rejects the call because the
+     * session is old (`requires-recent-login`) and an [activityContext] is available, a fresh
+     * Google login is requested once and the deletion is retried.
+     */
+    override suspend fun deleteAccount(activityContext: Context?): AppResult<Unit> {
+        var result = deleteAccountOnce()
+        val error = (result as? AppResult.Failure)?.error
+        if (error is AppError.Auth && error.code == "requires-recent-login" && activityContext != null) {
+            when (val reauth = reauthenticate(activityContext)) {
+                is AppResult.Success -> result = deleteAccountOnce()
+                is AppResult.Failure -> return reauth
+            }
+        }
+        return result
+    }
+
+    private suspend fun deleteAccountOnce(): AppResult<Unit> = runCatchingApp(errorMapper) {
         val user = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
         val lastSignIn = user.metadata?.lastSignInTimestamp ?: 0L
         if (System.currentTimeMillis() - lastSignIn > RECENT_LOGIN_WINDOW_MS) {
@@ -416,6 +435,28 @@ class FirebaseAuthRepository @Inject constructor(
         settings.removeSavedAccount(uid)
         google.clearCredentialState(appContext)
     }
+
+    override suspend fun reauthenticate(activityContext: Context?): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val user = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
+        when (user.providerData.lastOrNull()?.providerId) {
+            "google.com" -> {
+                val context = activityContext ?: throw AppErrorException(AppError.Auth("requires-recent-login"))
+                val token = google.requestIdToken(context, onlyAuthorizedAccounts = false)
+                user.reauthenticate(GoogleAuthProvider.getCredential(token.idToken, null)).await()
+            }
+            else -> {
+                // E-mail session: try the remembered/typed password, otherwise report it back.
+                val email = user.email ?: throw AppErrorException(AppError.Auth("requires-recent-login"))
+                val password = pendingPassword
+                if (password.isNullOrBlank()) throw AppErrorException(AppError.Auth("requires-recent-login"))
+                user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
+            }
+        }
+        Unit
+    }
+
+    /** Password of the last email sign-in (in memory only, never persisted). */
+    @Volatile private var pendingPassword: String? = null
 
     override suspend fun forgetSavedAccount(uid: String) = settings.removeSavedAccount(uid)
 

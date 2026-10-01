@@ -88,4 +88,20 @@
     <string name="set_guest_email_label">E-mail</string>
     <string name="set_guest_password">Password (6+ characters)</string>
     <string name="set_guest_save">Save account</string>
+    <string name="set_server">AI server</string>
+    <string name="set_server_title">AI server (search agent)</string>
+    <string name="set_server_hint">https://your-server.example.com</string>
+    <string name="set_server_body">Address of the Anime Black server that powers the AI search agent. It is stored on this device only; leave it empty to use the address built into this version.</string>
+    <string name="set_server_current">Current address</string>
+    <string name="set_server_none">Not configured (built into the app)</string>
+    <string name="set_server_save">Save</string>
+    <string name="set_server_test">Test connection</string>
+    <string name="set_server_reset">Reset to the built-in address</string>
+    <string name="set_server_saved">Server address saved</string>
+    <string name="set_server_reset_done">Server address reset</string>
+    <string name="set_server_invalid">Enter an https:// address (http://localhost or 10.0.2.2 is allowed in debug builds only)</string>
+    <string name="set_server_ok">Server reachable ✔</string>
+    <string name="set_server_fail">Server not reachable — check the address</string>
+    <string name="set_server_testing">Testing…</string>
+    <string name="set_delete_reauth">The session is old, so Google sign-in will be requested again to confirm deletion.</string>
 </resources>

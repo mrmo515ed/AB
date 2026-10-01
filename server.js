@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -9,6 +10,50 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// ---------------------------------------------------------------------------------
+// Optional API protection. Everything keeps working when these are unset (the app
+// and the web UI are unaffected); set them to harden a public deployment:
+//   ANIMEBLACK_AGENT_TOKEN   -> Android/API clients must send it (x-ab-token header
+//                               or ?token=) to call /api/gemini/search-agent.
+//   ANIMEBLACK_ADMIN_TOKEN   -> /api/admin/metrics requires it (?token= or header).
+//   ANIMEBLACK_TRUST_PROXY   -> set to 1 behind a proxy so the real client IP is rate limited.
+// ---------------------------------------------------------------------------------
+const AGENT_TOKEN = (process.env.ANIMEBLACK_AGENT_TOKEN || "").trim();
+const ADMIN_TOKEN = (process.env.ANIMEBLACK_ADMIN_TOKEN || "").trim();
+if (process.env.ANIMEBLACK_TRUST_PROXY === "1") app.set("trust proxy", true);
+
+function requestToken(req) {
+  return String(req.get("x-ab-token") || req.query.token || "").trim();
+}
+
+function timingSafeEqual(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  if (x.length !== y.length) return false;
+  return crypto.timingSafeEqual(x, y);
+}
+
+/** Simple in-memory limiter (per client IP). Enough for a single Node instance. */
+function rateLimit({ windowMs, max, name }) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.socket?.remoteAddress || "unknown";
+    const entry = hits.get(key);
+    if (!entry || now - entry.start >= windowMs) {
+      hits.set(key, { start: now, count: 1 });
+    } else if (++entry.count > max) {
+      res.setHeader("Retry-After", Math.ceil((entry.start + windowMs - now) / 1000));
+      return res.status(429).json({ success: false, code: "RATE_LIMITED", error: `Too many requests (${name}). Try again shortly.` });
+    }
+    if (hits.size > 5000) for (const [k, v] of hits) if (now - v.start >= windowMs) hits.delete(k);
+    next();
+  };
+}
+
+const agentRateLimit = rateLimit({ windowMs: 60_000, max: Number(process.env.ANIMEBLACK_AGENT_RPM) || 20, name: "search-agent" });
+const adminRateLimit = rateLimit({ windowMs: 60_000, max: 30, name: "admin-metrics" });
 
 // Body parsing with generous limit
 app.use(express.json({ limit: "25mb" }));
@@ -65,8 +110,11 @@ app.get("/api/health", (req, res) => {
 });
 
 // Google Search Grounding Agent Endpoint
-app.post("/api/gemini/search-agent", async (req, res) => {
+app.post("/api/gemini/search-agent", agentRateLimit, async (req, res) => {
   try {
+    if (AGENT_TOKEN && !timingSafeEqual(requestToken(req), AGENT_TOKEN)) {
+      return res.status(401).json({ success: false, code: "UNAUTHORIZED", error: "Invalid or missing API token." });
+    }
     const { prompt, mode = "general", history = [] } = req.body;
 
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
@@ -74,6 +122,9 @@ app.post("/api/gemini/search-agent", async (req, res) => {
         success: false,
         error: "Prompt is required",
       });
+    }
+    if (prompt.length > 4000) {
+      return res.status(413).json({ success: false, error: "Prompt is too long." });
     }
 
     const cleanPrompt = prompt.trim();
@@ -383,7 +434,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/api/admin/metrics", (req, res) => {
+app.get("/api/admin/metrics", adminRateLimit, (req, res) => {
+  if (ADMIN_TOKEN && !timingSafeEqual(requestToken(req), ADMIN_TOKEN)) {
+    return res.status(401).json({ success: false, error: "Invalid or missing admin token." });
+  }
   const mem = process.memoryUsage();
   const avgLatency = latencySamples.length > 0
     ? Math.round(latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length)

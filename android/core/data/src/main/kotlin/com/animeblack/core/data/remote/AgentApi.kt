@@ -5,11 +5,15 @@ import com.animeblack.core.common.dispatchers.AbDispatchers
 import com.animeblack.core.common.dispatchers.Dispatcher
 import com.animeblack.core.common.result.AppError
 import com.animeblack.core.data.firebase.AppErrorException
+import com.animeblack.core.datastore.SettingsDataSource
 import com.animeblack.core.model.AgentAnswer
 import com.animeblack.core.model.AgentSource
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -27,19 +31,44 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /**
  * Client for the web server's Gemini search agent (`POST /api/gemini/search-agent`). The Gemini
  * key stays on the server — it is never shipped in the APK.
+ *
+ * The server address is taken from the in-app override (Settings → server) when the user set one,
+ * otherwise from the build-time value. So a tester can point the installed APK at any server
+ * without rebuilding it.
  */
 @Singleton
 class AgentApi @Inject constructor(
     private val client: OkHttpClient,
     private val config: AppConfig,
+    private val settings: SettingsDataSource,
     @Dispatcher(AbDispatchers.IO) private val io: CoroutineDispatcher,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    val isConfigured: Boolean get() = config.hasApiServer
+    /** Base URL currently in effect; emits again whenever the in-app override changes. */
+    val baseUrl: Flow<String> = settings.settings
+        .map { config.effectiveApiBaseUrl(it.apiBaseUrlOverride) }
+        .distinctUntilChanged()
+
+    /** True when [url] can be used for server calls (https, or localhost http in debug builds). */
+    fun isConfigured(url: String): Boolean = config.isUsableServerUrl(url)
+
+    suspend fun currentBaseUrl(): String = config.effectiveApiBaseUrl(settings.current().apiBaseUrlOverride)
+
+    /** The URL the user typed in Settings (empty when the build-time value is used). */
+    suspend fun overrideUrl(): String = settings.current().apiBaseUrlOverride
+
+    /** Cheap reachability probe used by the settings screen (`GET /api/health`). */
+    suspend fun health(url: String = currentBaseUrl()): Boolean = withContext(io) {
+        if (!isConfigured(url)) return@withContext false
+        runCatching {
+            client.newCall(Request.Builder().url("$url/api/health").get().build()).execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
 
     suspend fun ask(prompt: String, mode: String, history: List<Pair<String, String>>): AgentAnswer = withContext(io) {
-        if (!config.hasApiServer) throw AppErrorException(AppError.Validation("agent", "not-configured"))
+        val base = currentBaseUrl()
+        if (!isConfigured(base)) throw AppErrorException(AppError.Validation("agent", "not-configured"))
         val body = buildJsonObject {
             put("prompt", prompt)
             put("mode", mode)
@@ -52,10 +81,15 @@ class AgentApi @Inject constructor(
                 }
             }
         }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val request = Request.Builder()
-            .url(config.apiBaseUrl.trimEnd('/') + "/api/gemini/search-agent")
-            .post(body)
-            .build()
+        val request = try {
+            Request.Builder()
+                .url("$base/api/gemini/search-agent")
+                .apply { if (config.apiToken.isNotBlank()) header("x-ab-token", config.apiToken) }
+                .post(body)
+                .build()
+        } catch (e: IllegalArgumentException) {
+            throw AppErrorException(AppError.Validation("agent", "invalid-server-url", e))
+        }
         client.newCall(request).execute().use { response ->
             val root = runCatching { json.parseToJsonElement(response.body.string()).jsonObject }.getOrNull() ?: JsonObject(emptyMap())
             if (!response.isSuccessful || root.str("success") == "false") {

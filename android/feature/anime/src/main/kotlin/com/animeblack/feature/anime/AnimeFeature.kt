@@ -397,10 +397,17 @@ data class AgentUiState(
 
 @HiltViewModel
 class SearchAgentViewModel @Inject constructor(private val repository: AnimeRepository) : ViewModel() {
-    private val _state = MutableStateFlow(AgentUiState(configured = repository.isAgentConfigured))
+    private val _state = MutableStateFlow(AgentUiState())
     val state: StateFlow<AgentUiState> = _state.asStateFlow()
     private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 2)
     val messages: SharedFlow<Int> = _messages.asSharedFlow()
+
+    init {
+        // The server URL can be changed from Settings at any time, so the flag stays live.
+        viewModelScope.launch {
+            repository.agentConfigured.collect { configured -> _state.update { it.copy(configured = configured) } }
+        }
+    }
 
     fun onInput(v: String) = _state.update { it.copy(input = v.take(2_000)) }
     fun onMode(m: String) = _state.update { it.copy(mode = m) }

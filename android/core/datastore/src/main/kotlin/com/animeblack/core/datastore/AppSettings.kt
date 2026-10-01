@@ -21,4 +21,9 @@ data class AppSettings(
     val pinnedChats: Set<String> = emptySet(),
     val archivedChats: Set<String> = emptySet(),
     val hiddenPosts: Set<String> = emptySet(),
+    /**
+     * Optional in-app override of the Anime Black server base URL (AI agent / admin metrics).
+     * Empty means "use the build-time value" (`-Panimeblack.apiBaseUrl` / `ANIMEBLACK_API_BASEURL`).
+     */
+    val apiBaseUrlOverride: String = "",
 )

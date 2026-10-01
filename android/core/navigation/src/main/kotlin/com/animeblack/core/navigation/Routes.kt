@@ -60,6 +60,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SecurityRoute
 @Serializable data object BlockedUsersRoute
 @Serializable data object SyncDiagnosticsRoute
+@Serializable data object ServerConfigRoute
 @Serializable data class LegalRoute(val document: String)
 
 // ------------------------------------------------------------------ More hub

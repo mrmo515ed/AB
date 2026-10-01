@@ -87,7 +87,13 @@ interface AuthRepository {
     suspend fun sendEmailVerification(): AppResult<Unit>
     suspend fun reloadUser(): AppResult<Boolean>
     suspend fun signOut()
-    suspend fun deleteAccount(): AppResult<Unit>
+
+    /** Deletes the account. With [activityContext] a fresh Google login is requested when Firebase
+     *  requires a recent login (`requires-recent-login`). */
+    suspend fun deleteAccount(activityContext: Context? = null): AppResult<Unit>
+
+    /** Re-verifies the current session (Google ID token, or e-mail + current password). */
+    suspend fun reauthenticate(activityContext: Context?): AppResult<Unit>
     suspend fun forgetSavedAccount(uid: String)
     suspend fun markProfileCompleted()
 }
@@ -286,7 +292,9 @@ interface AnimeRepository {
     suspend fun search(query: String, mediaType: String = "ANIME"): AppResult<List<AnimeItem>>
     suspend fun detail(id: String, mediaType: String = "ANIME"): AppResult<AnimeItem>
     suspend fun askAgent(prompt: String, mode: String, history: List<Pair<String, String>>): AppResult<AgentAnswer>
-    val isAgentConfigured: Boolean
+
+    /** Emits true when an AI-agent server URL is configured (in-app override or build-time value). */
+    val agentConfigured: Flow<Boolean>
     fun observeFavorites(): Flow<List<String>>
     suspend fun toggleFavorite(anime: AnimeItem): AppResult<Unit>
     suspend fun addToHistory(anime: AnimeItem): AppResult<Unit>

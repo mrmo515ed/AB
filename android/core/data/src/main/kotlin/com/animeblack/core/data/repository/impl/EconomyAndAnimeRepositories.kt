@@ -106,7 +106,7 @@ class DefaultAnimeRepository @Inject constructor(
     private val errorMapper: FirebaseErrorMapper,
 ) : AnimeRepository {
 
-    override val isAgentConfigured: Boolean get() = agent.isConfigured
+    override val agentConfigured: Flow<Boolean> get() = agent.baseUrl.map { agent.isConfigured(it) }
 
     override suspend fun trending(page: Int): AppResult<List<AnimeItem>> = runCatchingApp(errorMapper) {
         try {

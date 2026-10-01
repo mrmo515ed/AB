@@ -63,7 +63,7 @@ android {
         buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"${providers.gradleProperty("animeblack.firestoreDatabaseId").orNull ?: "(default)"}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${providers.gradleProperty("animeblack.googleWebClientId").orNull ?: googleWebClientId("com.animeblack.app")}\"")
         buildConfigField("String", "API_BASE_URL", "\"${secret("animeblack.apiBaseUrl").orEmpty()}\"")
-        buildConfigField("boolean", "HAS_GOOGLE_SERVICES_JSON", "true")
+        buildConfigField("String", "API_TOKEN", "\"${secret("animeblack.apiToken").orEmpty()}\"")
     }
 
     signingConfigs {

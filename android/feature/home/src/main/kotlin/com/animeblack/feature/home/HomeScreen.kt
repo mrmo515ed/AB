@@ -176,9 +176,10 @@ fun HomeScreen(navigator: HomeNavigator, viewModel: HomeViewModel = hiltViewMode
                     item(key = "composer") {
                         ComposerPrompt(avatar = state.me?.avatar.orEmpty(), name = state.me?.displayName.orEmpty(), onClick = { navigator.createPost(null) })
                     }
+                    val feedError = state.error
                     when {
-                        state.error != null && state.feed.posts.isEmpty() -> item(key = "error") {
-                            ErrorState(stringResource(state.error!!.messageRes()), onRetry = { viewModel.clearError() })
+                        feedError != null && state.feed.posts.isEmpty() -> item(key = "error") {
+                            ErrorState(stringResource(feedError.messageRes()), onRetry = { viewModel.clearError() })
                         }
                         !state.feed.initialLoaded -> items(3, key = { "sk$it" }) {
                             PostSkeleton(Modifier.widthIn(max = 720.dp).padding(horizontal = 12.dp))

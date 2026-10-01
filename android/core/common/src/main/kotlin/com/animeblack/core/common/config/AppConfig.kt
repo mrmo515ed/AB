@@ -11,6 +11,8 @@ data class AppConfig(
     val googleWebClientId: String,
     /** Origin of the deployed Anime Black web server (Gemini search agent, admin metrics). */
     val apiBaseUrl: String,
+    /** Optional API token sent to the server (`ANIMEBLACK_AGENT_TOKEN`) when one is configured. */
+    val apiToken: String = "",
     val functionsRegion: String = "us-central1",
     val isDebug: Boolean,
     val versionName: String,
@@ -20,5 +22,25 @@ data class AppConfig(
     /** Status-bar icon for locally displayed notifications. */
     val notificationIconRes: Int = 0,
 ) {
-    val hasApiServer: Boolean get() = apiBaseUrl.startsWith("https://")
+    /**
+     * Base URL in effect for server calls: the in-app override from Settings when set, otherwise
+     * the build-time value (`-Panimeblack.apiBaseUrl` / `ANIMEBLACK_API_BASEURL` / `local.properties`).
+     */
+    fun effectiveApiBaseUrl(override: String): String =
+        override.trim().trimEnd('/').ifBlank { apiBaseUrl.trim().trimEnd('/') }
+
+    /**
+     * A usable server base URL: always https, or plain http only for local development hosts
+     * (10.0.2.2 emulator loopback / localhost / 127.0.0.1) in debug builds.
+     */
+    fun isUsableServerUrl(url: String): Boolean {
+        val trimmed = url.trim()
+        if (trimmed.startsWith("https://")) return true
+        if (!isDebug) return false
+        return trimmed.startsWith("http://10.0.2.2") ||
+            trimmed.startsWith("http://localhost") ||
+            trimmed.startsWith("http://127.0.0.1")
+    }
+
+    val hasApiServer: Boolean get() = isUsableServerUrl(effectiveApiBaseUrl(""))
 }

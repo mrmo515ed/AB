@@ -88,4 +88,20 @@
     <string name="set_guest_email_label">البريد الإلكتروني</string>
     <string name="set_guest_password">كلمة المرور (6 أحرف أو أكثر)</string>
     <string name="set_guest_save">حفظ الحساب</string>
+    <string name="set_server">خادم الذكاء الاصطناعي</string>
+    <string name="set_server_title">خادم الذكاء الاصطناعي (وكيل البحث)</string>
+    <string name="set_server_hint">https://your-server.example.com</string>
+    <string name="set_server_body">عنوان خادم Anime Black الذي يشغّل وكيل البحث الذكي. يُحفظ على هذا الجهاز فقط؛ اتركه فارغًا لاستخدام العنوان المدمج في هذا الإصدار.</string>
+    <string name="set_server_current">العنوان الحالي</string>
+    <string name="set_server_none">غير مُهيّأ (مدمج في التطبيق)</string>
+    <string name="set_server_save">حفظ</string>
+    <string name="set_server_test">اختبار الاتصال</string>
+    <string name="set_server_reset">استعادة العنوان المدمج</string>
+    <string name="set_server_saved">تم حفظ عنوان الخادم</string>
+    <string name="set_server_reset_done">تمت استعادة العنوان المدمج</string>
+    <string name="set_server_invalid">أدخل عنوان https:// (يُسمح بـ http://localhost أو 10.0.2.2 في نسخ التطوير فقط)</string>
+    <string name="set_server_ok">الخادم متاح ✔</string>
+    <string name="set_server_fail">الخادم غير متاح — تحقق من العنوان</string>
+    <string name="set_server_testing">جارٍ الاختبار…</string>
+    <string name="set_delete_reauth">الجلسة قديمة، وسيُطلب تسجيل الدخول بجوجل مرة أخرى لتأكيد الحذف.</string>
 </resources>

@@ -18,10 +18,11 @@ object AppModule {
         firestoreDatabaseId = BuildConfig.FIRESTORE_DATABASE_ID,
         googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID,
         apiBaseUrl = BuildConfig.API_BASE_URL,
+        apiToken = BuildConfig.API_TOKEN,
         isDebug = BuildConfig.DEBUG,
         versionName = BuildConfig.VERSION_NAME,
         versionCode = BuildConfig.VERSION_CODE,
-        hasAndroidFirebaseApp = BuildConfig.HAS_GOOGLE_SERVICES_JSON,
+        hasAndroidFirebaseApp = true, // google-services.json is mandatory: the build fails without it
         notificationIconRes = R.drawable.ic_stat_notification,
     )
 }

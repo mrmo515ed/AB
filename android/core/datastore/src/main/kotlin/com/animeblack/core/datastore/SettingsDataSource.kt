@@ -63,6 +63,7 @@ class SettingsDataSource @Inject constructor(
         val postDraft = stringPreferencesKey("post_draft")
         val deviceId = stringPreferencesKey("device_id")
         val sessionId = stringPreferencesKey("session_id")
+        val apiBaseUrl = stringPreferencesKey("api_base_url")
     }
 
     private val safeData: Flow<Preferences> = store.data.catch { e ->
@@ -91,6 +92,7 @@ class SettingsDataSource @Inject constructor(
         pinnedChats = this[Keys.pinnedChats] ?: emptySet(),
         archivedChats = this[Keys.archivedChats] ?: emptySet(),
         hiddenPosts = this[Keys.hiddenPosts] ?: emptySet(),
+        apiBaseUrlOverride = this[Keys.apiBaseUrl].orEmpty(),
     )
 
     suspend fun current(): AppSettings = settings.first()
@@ -118,6 +120,7 @@ class SettingsDataSource @Inject constructor(
             p[Keys.pinnedChats] = next.pinnedChats
             p[Keys.archivedChats] = next.archivedChats
             p[Keys.hiddenPosts] = next.hiddenPosts
+            p[Keys.apiBaseUrl] = next.apiBaseUrlOverride.trim()
         }
     }
 
