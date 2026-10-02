@@ -9,6 +9,7 @@ import com.animeblack.core.common.result.AppError
 import com.animeblack.core.common.result.AppResult
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.outbox.OutboxRepository
+import com.animeblack.core.data.repository.EconomyRepository
 import com.animeblack.core.data.repository.FeedState
 import com.animeblack.core.data.repository.NotificationRepository
 import com.animeblack.core.data.repository.PostRepository
@@ -77,6 +78,7 @@ data class HomeUiState(
     val online: Boolean = true,
     val autoplay: Boolean = true,
     val error: AppError? = null,
+    val claimingDaily: Boolean = false,
 )
 
 @HiltViewModel
@@ -87,10 +89,15 @@ class HomeViewModel @Inject constructor(
     private val notifications: NotificationRepository,
     private val settings: SettingsDataSource,
     private val outbox: OutboxRepository,
+    private val economy: EconomyRepository,
     network: NetworkMonitor,
 ) : PostInteractionsViewModel(posts) {
 
     private val error = MutableStateFlow<AppError?>(null)
+    private val claimingDaily = MutableStateFlow(false)
+    private val _dailyClaimedText = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val dailyClaimedText: SharedFlow<String> = _dailyClaimedText.asSharedFlow()
+
     private val feedFlow = posts.observeFeed().catch { e ->
         error.value = (e as? AppErrorException)?.error ?: AppError.Unknown(e)
         emit(FeedState(initialLoaded = true))
@@ -99,15 +106,29 @@ class HomeViewModel @Inject constructor(
     val state: StateFlow<HomeUiState> = combine(
         combine(feedFlow, stories.observeActiveStories(), users.observeMe()) { f, s, m -> Triple(f, s, m) },
         combine(posts.observeSavedIds(), notifications.observeUnreadCount(), network.isOnline) { a, b, c -> Triple(a, b, c) },
-        combine(settings.settings, error) { s, e -> s to e },
-    ) { (feed, storyList, me), (saved, unread, online), (s, err) ->
-        HomeUiState(feed, storyList, me, saved, unread, online, s.autoplayVideos && !s.dataSaver, err)
+        combine(settings.settings, error, claimingDaily) { s, e, c -> Triple(s, e, c) },
+    ) { (feed, storyList, me), (saved, unread, online), (s, err, claiming) ->
+        HomeUiState(feed, storyList, me, saved, unread, online, s.autoplayVideos && !s.dataSaver, err, claiming)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     fun loadMore() = viewModelScope.launch { emitError(posts.loadMoreFeed()) }
     fun retryUploads() = viewModelScope.launch { outbox.retryFailed() }
     fun hide(post: Post) = viewModelScope.launch { settings.update { it.copy(hiddenPosts = it.hiddenPosts + post.id) } }
     fun clearError() { error.value = null }
+
+    fun claimDaily() {
+        if (claimingDaily.value) return
+        claimingDaily.value = true
+        viewModelScope.launch {
+            val r = economy.claimDailyReward()
+            claimingDaily.value = false
+            if (r is AppResult.Success) {
+                _dailyClaimedText.tryEmit("🎁 تم استلام المكافأة اليومية: +${r.data.rewardCoins} عملة و +${r.data.rewardGems} جوهرة!")
+            } else {
+                emitError(r)
+            }
+        }
+    }
 }
 
 data class PostDetailUiState(
@@ -229,6 +250,7 @@ class CreatePostViewModel @Inject constructor(
     }
 
     fun onText(v: String) = _state.update { it.copy(text = v.take(5_000)) }
+    fun onCategory(v: String) = _state.update { it.copy(category = v) }
     fun addMedia(items: List<LocalMedia>) = _state.update { it.copy(attachments = (it.attachments + items).distinctBy { m -> m.uri }.take(10)) }
     fun removeMedia(uri: String) = _state.update { it.copy(attachments = it.attachments.filterNot { m -> m.uri == uri }) }
     fun togglePoll() = _state.update { it.copy(pollEnabled = !it.pollEnabled) }

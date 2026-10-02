@@ -1,5 +1,11 @@
 package com.animeblack.core.designsystem.component
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,11 +16,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -23,11 +33,11 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.animeblack.core.designsystem.theme.AbColors
 
-enum class AvatarRing { None, StoryUnseen, StorySeen }
+enum class AvatarRing { None, StoryUnseen, StorySeen, Gold, Neon }
 
 /**
  * Circular avatar with a gradient initial fallback (shown while loading or when the URL fails),
- * optional story ring and online indicator.
+ * optional animated story ring and online indicator.
  */
 @Composable
 fun Avatar(
@@ -40,6 +50,21 @@ fun Avatar(
     onClick: (() -> Unit)? = null,
 ) {
     val ringWidth = if (ring == AvatarRing.None) 0.dp else 2.5.dp
+    val spinAngle = if (ring == AvatarRing.StoryUnseen) {
+        val transition = rememberInfiniteTransition(label = "storySpin")
+        val angle by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 3600, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "angle",
+        )
+        angle
+    } else {
+        0f
+    }
     Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         val inner = size - ringWidth * 2 - if (ring == AvatarRing.None) 0.dp else 3.dp
         Box(
@@ -48,8 +73,17 @@ fun Avatar(
                 .then(
                     when (ring) {
                         AvatarRing.None -> Modifier
-                        AvatarRing.StoryUnseen -> Modifier.border(ringWidth, AbColors.StoryRing, CircleShape)
+                        AvatarRing.StoryUnseen -> Modifier.drawBehind {
+                            rotate(spinAngle) {
+                                drawCircle(
+                                    brush = AbColors.StoryRing,
+                                    style = Stroke(width = ringWidth.toPx()),
+                                )
+                            }
+                        }
                         AvatarRing.StorySeen -> Modifier.border(ringWidth, AbColors.StorySeenRing, CircleShape)
+                        AvatarRing.Gold -> Modifier.border(ringWidth, AbColors.GoldGradient, CircleShape)
+                        AvatarRing.Neon -> Modifier.border(ringWidth, AbColors.CyanVioletGradient, CircleShape)
                     },
                 )
                 .then(if (onClick != null) Modifier.clip(CircleShape).clickable(onClick = onClick) else Modifier),
@@ -59,7 +93,7 @@ fun Avatar(
                 modifier = Modifier
                     .size(inner)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFFFF7A00), Color(0xFFE60000)))),
+                    .background(Brush.linearGradient(listOf(AbColors.DeepPurple, AbColors.Blue))),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

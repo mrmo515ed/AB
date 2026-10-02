@@ -276,7 +276,27 @@ fun CreatePostScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(state.me?.avatar, state.me?.displayName.orEmpty(), size = 42.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(state.me?.displayName.orEmpty(), style = MaterialTheme.typography.titleSmall)
+                Column(Modifier.weight(1f)) {
+                    Text(state.me?.displayName.orEmpty(), style = MaterialTheme.typography.titleSmall)
+                    Text("اختر تصنيف المنشور وشارك إبداعك", style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted)
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    "" to "عام",
+                    "أنمي" to "📺 أنمي",
+                    "مانجا" to "📖 مانجا",
+                    "فنون" to "🎨 فنون",
+                    "ميمز" to "😂 ميمز",
+                    "مراجعة" to "🎬 مراجعة",
+                    "نظريات" to "🧠 نظريات",
+                ).forEach { (key, label) ->
+                    FilterChip(
+                        selected = state.category == key,
+                        onClick = { viewModel.onCategory(key) },
+                        label = { Text(label) },
+                    )
+                }
             }
             AbTextField(
                 value = state.text,

@@ -127,12 +127,16 @@ private data class Tile(@StringRes val label: Int, @DrawableRes val icon: Int, v
 @Composable
 private fun QuickAction(@DrawableRes icon: Int, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(AbColors.Charcoal2).clickable(onClick = onClick).padding(vertical = 10.dp),
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(AbColors.Charcoal2)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AbIcon(icon, null, tint = AbColors.Violet, size = 22.dp)
+        AbIcon(icon, null, tint = AbColors.Cyan, size = 22.dp)
         Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -141,6 +145,7 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val me = state.me
+    var showVisualCenterDialog by remember { mutableStateOf(false) }
     val tiles = buildList {
         add(Tile(R.string.more_saved, AbIcons.BookmarkFilled, AbColors.Cyan, SavedPostsRoute))
         add(Tile(R.string.more_economy, AbIcons.Paid, AbColors.Gold, EconomyRoute))
@@ -163,52 +168,233 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // 1. Luxury Hero Profile Card (matches web PAGES.more hero + overlapping stats)
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickAction(AbIcons.QrCode2, stringResource(R.string.more_card), Modifier.weight(1f)) { navigate(QrCardRoute) }
-                    QuickAction(AbIcons.Edit, stringResource(R.string.more_edit), Modifier.weight(1f)) { navigate(EditProfileRoute) }
-                    QuickAction(AbIcons.SupervisorAccount, stringResource(R.string.more_switch), Modifier.weight(1f)) { navigate(AccountSwitcherRoute) }
-                    QuickAction(AbIcons.Share, stringResource(R.string.more_share), Modifier.weight(1f)) {
-                        me?.let { u -> context.shareText(u.displayName + "\n" + shareLink("user", u.id), context.getString(com.animeblack.core.ui.R.string.ui_share_via)) }
-                    }
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                GlassCard(Modifier.fillMaxWidth(), onClick = { navigate(ProfileRoute()) }) {
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    borderColor = AbColors.Cyan.copy(alpha = 0.28f),
+                    onClick = { navigate(ProfileRoute()) },
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(me?.avatar, me?.displayName.orEmpty(), size = 60.dp)
+                        Avatar(
+                            url = me?.avatar,
+                            name = me?.displayName.orEmpty(),
+                            size = 64.dp,
+                            ring = com.animeblack.core.designsystem.component.AvatarRing.StoryUnseen,
+                        )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(me?.displayName.orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(me?.displayName.orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
                                 if (me?.showsVerifiedBadge == true) VerifiedBadge(gold = me.isGoldVerified, size = 16.dp, modifier = Modifier.padding(start = 4.dp))
                                 me?.let { u -> state.catalog.badgeFor(u.level)?.let { (_, badge) -> LevelBadgeImage(badge, size = 22.dp, modifier = Modifier.padding(start = 4.dp)) } }
                             }
                             Text(me?.handle.orEmpty(), color = AbColors.TextMuted, style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
                                 Pill(stringResource(R.string.more_level, state.wallet.level), color = AbColors.DeepPurple)
-                                Pill(compactCount(state.wallet.coins) + " " + stringResource(R.string.eco_coins), color = AbColors.Charcoal4, textColor = AbColors.Gold)
-                                Pill(compactCount(state.wallet.gems) + " " + stringResource(R.string.eco_gems), color = AbColors.Charcoal4, textColor = AbColors.Cyan)
+                                Pill(compactCount(state.wallet.coins) + " " + stringResource(R.string.eco_coins), color = AbColors.Gold, textColor = AbColors.BrightGold)
+                                Pill(compactCount(state.wallet.gems) + " " + stringResource(R.string.eco_gems), color = AbColors.Cyan, textColor = AbColors.Cyan)
                             }
                         }
                         AbIcon(AbIcons.ChevronRight, stringResource(R.string.more_view_profile), tint = AbColors.TextMuted)
                     }
+                    // XP Progress Bar
+                    if (me != null) {
+                        Spacer(Modifier.height(12.dp))
+                        val xpFraction = if (me.xpNext > 0) (me.xp.toFloat() / me.xpNext).coerceIn(0f, 1f) else 0f
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text("XP ${me.xp}/${me.xpNext}", style = MaterialTheme.typography.labelSmall, color = AbColors.Cyan, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(8.dp))
+                            LinearProgressIndicator(
+                                progress = { xpFraction },
+                                modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = AbColors.Cyan,
+                                trackColor = AbColors.Charcoal4,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Lv.${me.level + 1}", style = MaterialTheme.typography.labelSmall, color = AbColors.Violet, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        // 4-Stat Row (سمعة، متابع، عملة، نجمة)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.StarFilled,
+                                value = compactCount(me.reputation),
+                                label = "السمعة",
+                                iconTint = AbColors.Gold,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navigate(LevelsRoute) },
+                            )
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Groups,
+                                value = compactCount(maxOf(me.followersCount, me.followersList.size)),
+                                label = "متابع",
+                                iconTint = AbColors.Cyan,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navigate(ProfileRoute()) },
+                            )
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Paid,
+                                value = compactCount(state.wallet.coins),
+                                label = "عملة",
+                                iconTint = AbColors.BrightGold,
+                                valueColor = AbColors.BrightGold,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navigate(EconomyRoute) },
+                            )
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Diamond,
+                                value = compactCount(state.wallet.stars),
+                                label = "نجمة",
+                                iconTint = AbColors.Violet,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navigate(EconomyRoute) },
+                            )
+                        }
+                    }
                 }
             }
+
+            // 2. Quick Actions Row (بطاقتي، تعديل، تبديل، المركز البصري، مشاركة)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickAction(AbIcons.QrCode2, stringResource(R.string.more_card), Modifier.weight(1f)) { navigate(QrCardRoute) }
+                    QuickAction(AbIcons.Edit, stringResource(R.string.more_edit), Modifier.weight(1f)) { navigate(EditProfileRoute) }
+                    QuickAction(AbIcons.Palette, "المظهر", Modifier.weight(1f)) { showVisualCenterDialog = true }
+                    QuickAction(AbIcons.SupervisorAccount, stringResource(R.string.more_switch), Modifier.weight(1f)) { navigate(AccountSwitcherRoute) }
+                    QuickAction(AbIcons.Share, stringResource(R.string.more_share), Modifier.weight(1f)) {
+                        me?.let { u -> context.shareText(u.displayName + "\n" + shareLink("user", u.id), context.getString(com.animeblack.core.ui.R.string.ui_share_via)) }
+                    }
+                }
+            }
+
+            // 3. Admin Banner (if Moderator/Admin)
+            if (me?.isModerator == true) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        borderColor = AbColors.Rose.copy(alpha = 0.45f),
+                        onClick = { navigate(AdminRoute) },
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.animeblack.core.designsystem.component.IconTile(
+                                icon = AbIcons.AdminPanelSettings,
+                                size = 42.dp,
+                                brush = AbColors.FireGradient,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("لوحة الإدارة والمشرفين • ADMIN", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Color.White)
+                                Text("إدارة المستخدمين، التوثيق، البلاغات، والعملات", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                            }
+                            Pill("دخول", color = AbColors.Rose)
+                        }
+                    }
+                }
+            }
+
+            // 4. Anime Hunter Games Promo Banner (matches web PAGES.more game card)
+            if (state.flags.gamesEnabled) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Brush.linearGradient(listOf(Color(0xFF1E1B4B), AbColors.DeepPurple, AbColors.Blue)))
+                            .clickable { navigate(GamesHubRoute) }
+                            .padding(16.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.animeblack.core.designsystem.component.IconTile(
+                                icon = AbIcons.SportsEsports,
+                                size = 44.dp,
+                                brush = AbColors.GoldGradient,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("صائد الأنمي • ANIME HUNTER", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Color.White)
+                                    Spacer(Modifier.width(6.dp))
+                                    Pill("LIVE", color = AbColors.Emerald)
+                                }
+                                Text("العب، اهزم الوحوش، واجمع العملات الذهبية والجواهر!", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f))
+                            }
+                            AbIcon(AbIcons.PlayArrowFilled, null, tint = Color.White, size = 28.dp)
+                        }
+                    }
+                }
+            }
+
+            // 5. Hub Feature Tiles Grid
             items(tiles, key = { it.label }) { tile ->
                 Column(
-                    Modifier.aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(AbColors.Charcoal2).clickable { navigate(tile.route) }.padding(10.dp),
+                    Modifier
+                        .aspectRatio(1.05f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AbColors.Charcoal2)
+                        .clickable { navigate(tile.route) }
+                        .padding(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(tile.color.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(tile.color.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
                         AbIcon(tile.icon, null, tint = tile.color, size = 26.dp)
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(stringResource(tile.label), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(tile.label), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+    }
+
+    if (showVisualCenterDialog) {
+        AlertDialog(
+            onDismissRequest = { showVisualCenterDialog = false },
+            containerColor = AbColors.Charcoal2,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AbIcon(AbIcons.Palette, null, tint = AbColors.Cyan, size = 22.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("المركز البصري وإطارات الأفاتار", fontWeight = FontWeight.Black)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("خصّص مظهر حسابك، إطارات الصورة الرمزية، والألقاب الملكية:", style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            Avatar(me?.avatar, me?.displayName.orEmpty(), size = 54.dp, ring = com.animeblack.core.designsystem.component.AvatarRing.StoryUnseen)
+                            Spacer(Modifier.height(4.dp))
+                            Text("طيف نيون", style = MaterialTheme.typography.labelSmall, color = AbColors.Cyan)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            Avatar(me?.avatar, me?.displayName.orEmpty(), size = 54.dp, ring = com.animeblack.core.designsystem.component.AvatarRing.Gold)
+                            Spacer(Modifier.height(4.dp))
+                            Text("ملكي ذهبي", style = MaterialTheme.typography.labelSmall, color = AbColors.BrightGold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            Avatar(me?.avatar, me?.displayName.orEmpty(), size = 54.dp, ring = com.animeblack.core.designsystem.component.AvatarRing.Neon)
+                            Spacer(Modifier.height(4.dp))
+                            Text("سايبر فايوليت", style = MaterialTheme.typography.labelSmall, color = AbColors.Violet)
+                        }
+                    }
+                    Text("يمكنك فتح المزيد من الشارات والألقاب عبر رفع مستواك في صفحة المستويات أو استبدال العملات في المحفظة.", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVisualCenterDialog = false
+                    navigate(LevelsRoute)
+                }) {
+                    Text("فتح المستويات والألقاب", color = AbColors.Cyan, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVisualCenterDialog = false }) {
+                    Text("إغلاق", color = AbColors.TextMuted)
+                }
+            },
+        )
     }
 }
 

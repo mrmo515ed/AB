@@ -9,6 +9,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,9 +37,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.animeblack.core.designsystem.component.AbIcon
 import com.animeblack.core.designsystem.component.AbIconButton
 import com.animeblack.core.designsystem.component.Avatar
+import com.animeblack.core.designsystem.component.AvatarRing
 import com.animeblack.core.designsystem.component.GlassCard
 import com.animeblack.core.designsystem.component.Pill
 import com.animeblack.core.designsystem.component.VerifiedBadge
@@ -48,6 +52,7 @@ import com.animeblack.core.model.MediaItem
 import com.animeblack.core.model.Poll
 import com.animeblack.core.model.Post
 import com.animeblack.core.model.Reaction
+import com.animeblack.core.model.User
 
 /** Callbacks for a post card; all optional so the card can be reused read-only. */
 data class PostActions(
@@ -67,6 +72,18 @@ data class PostActions(
     val onRetry: (Post) -> Unit = {},
 )
 
+private data class QuickReactionEmoji(val key: String, val emoji: String)
+
+private val quickReactionEmojis = listOf(
+    QuickReactionEmoji("love", "❤️"),
+    QuickReactionEmoji("fire", "🔥"),
+    QuickReactionEmoji("laugh", "😂"),
+    QuickReactionEmoji("wow", "😮"),
+    QuickReactionEmoji("sad", "😢"),
+    QuickReactionEmoji("clap", "👏"),
+)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PostCard(
     post: Post,
@@ -83,23 +100,45 @@ fun PostCard(
     var revealed by rememberSaveable(post.id) { mutableStateOf(!post.spoiler) }
     val failed = post.warningText == "__upload_failed__"
 
-    GlassCard(modifier = modifier.fillMaxWidth(), onClick = { actions.onOpen(post) }) {
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
+        borderColor = if (liked) AbColors.Rose.copy(alpha = 0.28f) else null,
+        onClick = { actions.onOpen(post) },
+    ) {
         // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(url = post.author.avatar, name = post.author.name, size = 42.dp, onClick = { actions.onAuthor(post.authorId) })
+            Avatar(
+                url = post.author.avatar,
+                name = post.author.name,
+                size = 44.dp,
+                ring = when {
+                    post.author.role in User.ADMIN_ROLES -> AvatarRing.Gold
+                    post.author.isVerified -> AvatarRing.StoryUnseen
+                    else -> AvatarRing.Neon
+                },
+                onClick = { actions.onAuthor(post.authorId) },
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         post.author.name.ifBlank { post.author.username },
                         style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false).clickable { actions.onAuthor(post.authorId) },
                     )
-                    if (post.author.isVerified) {
-                        Spacer(Modifier.width(4.dp))
-                        VerifiedBadge(size = 15.dp)
+                    if (post.author.isVerified || post.author.role in User.ADMIN_ROLES) {
+                        VerifiedBadge(gold = post.author.role in User.ADMIN_ROLES, size = 15.dp)
+                    }
+                    Pill(
+                        text = "Lv.${post.author.level.coerceAtLeast(1)}",
+                        color = AbColors.Gold,
+                        textColor = AbColors.BrightGold,
+                    )
+                    if (post.author.role.isNotBlank() && post.author.role != User.ROLE_MEMBER) {
+                        Pill(text = post.author.role, color = AbColors.Purple)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -113,7 +152,9 @@ fun PostCard(
                     }
                 }
             }
-            if (post.category.isNotBlank() && post.category != "عام") Pill(post.category, color = AbColors.Purple)
+            if (post.category.isNotBlank() && post.category != "عام") {
+                CategoryPill(post.category)
+            }
             AbIconButton(AbIcons.MoreVert, stringResource(R.string.ui_more), onClick = { actions.onMenu(post) })
         }
 
@@ -153,6 +194,31 @@ fun PostCard(
             }
         }
 
+        // Quoted Post (if any)
+        post.quotedPost?.let { quoted ->
+            if (quoted.text.isNotBlank() || quoted.authorName.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(AbColors.Ink.copy(alpha = 0.7f))
+                        .border(1.dp, AbColors.Purple.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                        .padding(10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AbIcon(AbIcons.FormatQuote, null, tint = AbColors.Cyan, size = 14.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(quoted.authorName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = AbColors.Cyan)
+                    }
+                    if (quoted.text.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(quoted.text, style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
         val media = post.media
         if (media != null && media.items.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -169,22 +235,62 @@ fun PostCard(
 
         if (post.tags.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                post.tags.take(4).forEach { tag ->
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                post.tags.take(6).forEach { tag ->
                     Text(
                         "#$tag",
-                        color = AbColors.Violet,
+                        color = AbColors.Cyan,
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.clickable { actions.onHashtag(tag) },
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(AbColors.Cyan.copy(alpha = 0.12f))
+                            .border(0.75.dp, AbColors.Cyan.copy(alpha = 0.28f), RoundedCornerShape(50))
+                            .clickable { actions.onHashtag(tag) }
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
                     )
+                }
+            }
+        }
+
+        // Quick 6-Emoji Reaction Bar (matches web postCard reaction bar)
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            quickReactionEmojis.forEach { item ->
+                val selected = myReaction == item.key
+                val count = post.reactionCounts[item.key] ?: 0
+                val shape = RoundedCornerShape(50)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(shape)
+                        .background(if (selected) AbColors.Cyan.copy(alpha = 0.20f) else AbColors.Ink.copy(alpha = 0.55f))
+                        .border(1.dp, if (selected) AbColors.Cyan else Color(0x1AFFFFFF), shape)
+                        .clickable { actions.onReact(post, item.key) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(text = item.emoji, fontSize = 13.sp)
+                    if (count > 0 || selected) {
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = (if (selected && count == 0) 1 else count).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected) AbColors.Cyan else AbColors.TextSecondary,
+                        )
+                    }
                 }
             }
         }
 
         // Counters
         val totalLikes = maxOf(post.likes, post.likedBy.size)
-        if (totalLikes > 0 || post.totalComments > 0) {
-            Spacer(Modifier.height(10.dp))
+        if (totalLikes > 0 || post.totalComments > 0 || post.views > 0) {
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 post.reactionCounts.entries.filter { it.value > 0 }.sortedByDescending { it.value }.take(3).forEach { (key, _) ->
                     val style = reactionStyle(key)
@@ -197,6 +303,12 @@ fun PostCard(
                 Spacer(Modifier.weight(1f))
                 if (post.totalComments > 0) {
                     Text(stringResource(R.string.ui_comments_count, compactCount(post.totalComments)), style = MaterialTheme.typography.labelMedium, color = AbTheme.colors.textMuted)
+                }
+                if (post.views > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    AbIcon(AbIcons.Visibility, null, tint = AbTheme.colors.textMuted, size = 14.dp)
+                    Spacer(Modifier.width(3.dp))
+                    Text(compactCount(post.views), style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted)
                 }
             }
         }
@@ -236,6 +348,20 @@ fun PostCard(
             )
         }
     }
+}
+
+@Composable
+private fun CategoryPill(category: String) {
+    val (label, color) = when (category.lowercase()) {
+        "anime", "أنمي" -> "📺 أنمي" to AbColors.Cyan
+        "manga", "مانجا" -> "📖 مانجا" to AbColors.Purple
+        "art", "فنون", "fanart" -> "🎨 فنون" to AbColors.Rose
+        "memes", "meme", "ميمز" -> "😂 ميمز" to AbColors.Gold
+        "review", "مراجعة", "مراجعات" -> "🎬 مراجعة" to AbColors.Emerald
+        "theory", "نظريات" -> "🧠 نظريات" to AbColors.Blue
+        else -> category to AbColors.Purple
+    }
+    Pill(label, color = color)
 }
 
 @Composable

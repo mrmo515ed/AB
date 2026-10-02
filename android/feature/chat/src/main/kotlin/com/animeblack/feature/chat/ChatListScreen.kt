@@ -71,6 +71,7 @@ fun ChatListScreen(actions: ChatListActions, viewModel: ChatListViewModel = hilt
     val snackbar = remember { SnackbarHostState() }
     var menuFor by remember { mutableStateOf<ConversationItem?>(null) }
     var confirmDelete by remember { mutableStateOf<ConversationItem?>(null) }
+    var chatFilter by remember { mutableStateOf("all") }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(context.getString(it)) } }
 
     Scaffold(
@@ -102,10 +103,47 @@ fun ChatListScreen(actions: ChatListActions, viewModel: ChatListViewModel = hilt
                 placeholder = stringResource(R.string.chat_search),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            val list = if (showArchived) state.archived else state.items
+            // Filter Chips Row (matches web PAGES.chat filter strip)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                com.animeblack.core.designsystem.component.GlowChip(
+                    text = "الكل",
+                    selected = !showArchived && chatFilter == "all",
+                    onClick = { viewModel.showArchived.value = false; chatFilter = "all" },
+                )
+                com.animeblack.core.designsystem.component.GlowChip(
+                    text = "غير مقروءة",
+                    selected = !showArchived && chatFilter == "unread",
+                    onClick = { viewModel.showArchived.value = false; chatFilter = "unread" },
+                )
+                com.animeblack.core.designsystem.component.GlowChip(
+                    text = "المثبتة",
+                    selected = !showArchived && chatFilter == "pinned",
+                    onClick = { viewModel.showArchived.value = false; chatFilter = "pinned" },
+                )
+                if (state.archived.isNotEmpty() || showArchived) {
+                    com.animeblack.core.designsystem.component.GlowChip(
+                        text = stringResource(R.string.chat_archived, state.archived.size),
+                        selected = showArchived,
+                        onClick = { viewModel.showArchived.value = !showArchived },
+                    )
+                }
+            }
+            val rawList = if (showArchived) state.archived else state.items
+            val list = remember(rawList, chatFilter, showArchived) {
+                if (showArchived) rawList
+                else when (chatFilter) {
+                    "unread" -> rawList.filter { it.unread > 0 }
+                    "pinned" -> rawList.filter { it.pinned }
+                    else -> rawList
+                }
+            }
+            val onlinePartners = remember(state.items) { state.items.filter { it.online && it.partner != null } }
             when {
                 state.loading -> LoadingState()
-                list.isEmpty() && state.archived.isEmpty() -> EmptyState(
+                rawList.isEmpty() && state.archived.isEmpty() -> EmptyState(
                     title = stringResource(R.string.chat_empty),
                     message = stringResource(R.string.chat_empty_hint),
                     icon = AbIcons.ChatBubble,
@@ -113,6 +151,65 @@ fun ChatListScreen(actions: ChatListActions, viewModel: ChatListViewModel = hilt
                     onAction = actions.newChat,
                 )
                 else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                    // Online Friends Strip
+                    if (!showArchived && onlinePartners.isNotEmpty()) {
+                        item(key = "online_strip") {
+                            androidx.compose.foundation.lazy.LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(onlinePartners, key = { "on_" + it.conversation.id }) { item ->
+                                    val p = item.partner!!
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .width(64.dp)
+                                            .clickable { actions.openChat(item.conversation.id, item.conversation.partnerId) },
+                                    ) {
+                                        Avatar(
+                                            url = p.avatar,
+                                            name = p.displayName,
+                                            size = 52.dp,
+                                            ring = com.animeblack.core.designsystem.component.AvatarRing.Neon,
+                                            online = true,
+                                        )
+                                        Text(
+                                            p.displayName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Pending Message Requests Banner
+                    if (!showArchived && state.requestsCount > 0) {
+                        item(key = "req_banner") {
+                            com.animeblack.core.designsystem.component.GlassCard(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                contentPadding = 12.dp,
+                                borderColor = AbColors.Cyan.copy(alpha = 0.35f),
+                                onClick = actions.openRequests,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    com.animeblack.core.designsystem.component.IconTile(
+                                        icon = AbIcons.MarkChatUnread,
+                                        size = 36.dp,
+                                        brush = AbColors.CyanVioletGradient,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(stringResource(R.string.chat_requests), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                        Text("لديك ${state.requestsCount} طلب مراسلة بانتظار المراجعة", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                    }
+                                    com.animeblack.core.designsystem.component.CountBadge(count = state.requestsCount)
+                                }
+                            }
+                        }
+                    }
                     if (!showArchived && state.archived.isNotEmpty()) {
                         item(key = "archived") {
                             Row(

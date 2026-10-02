@@ -180,56 +180,74 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
                             PrimaryTabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
                                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.profile_posts)) })
                                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.profile_reels) + " (${state.reels.size})") })
+                                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("الوسائط") })
                             }
                         }
-                        if (tab == 0) {
-                            if (posts.loadState.refresh is LoadState.NotLoading && posts.itemCount == 0) {
-                                item(key = "no_posts") { EmptyState(title = stringResource(R.string.profile_no_posts), icon = AbIcons.AutoStories) }
-                            }
-                            items(count = posts.itemCount, key = posts.itemKey { it.id }) { index ->
-                                posts[index]?.let { post ->
-                                    PostCard(
-                                        post = post,
-                                        myUid = state.myUid,
-                                        saved = post.id in state.savedIds,
-                                        actions = postActions,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    )
+                        when (tab) {
+                            0 -> {
+                                if (posts.loadState.refresh is LoadState.NotLoading && posts.itemCount == 0) {
+                                    item(key = "no_posts") { EmptyState(title = stringResource(R.string.profile_no_posts), icon = AbIcons.AutoStories) }
                                 }
-                            }
-                            if (posts.loadState.append is LoadState.Loading || posts.loadState.refresh is LoadState.Loading) {
-                                item(key = "loading") {
-                                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = AbColors.Violet)
+                                items(count = posts.itemCount, key = posts.itemKey { it.id }) { index ->
+                                    posts[index]?.let { post ->
+                                        PostCard(
+                                            post = post,
+                                            myUid = state.myUid,
+                                            saved = post.id in state.savedIds,
+                                            actions = postActions,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        )
                                     }
                                 }
-                            }
-                        } else {
-                            if (state.reels.isEmpty()) {
-                                item(key = "no_reels") { EmptyState(title = stringResource(R.string.profile_no_reels), icon = AbIcons.MovieFilter) }
-                            }
-                            items(state.reels.chunked(3).size, key = { "reels_$it" }) { rowIndex ->
-                                val row = state.reels.chunked(3)[rowIndex]
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    row.forEach { reel ->
-                                        Box(
-                                            Modifier.weight(1f).aspectRatio(9f / 16f).background(AbColors.Charcoal3).clickable { actions.openReel(reel.id) },
-                                        ) {
-                                            AsyncImage(
-                                                model = reel.coverUrl.takeIf { it.startsWith("http") } ?: reel.videoUrl,
-                                                contentDescription = reel.caption,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.matchParentSize(),
-                                            )
-                                            Row(Modifier.align(Alignment.BottomStart).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                AbIcon(AbIcons.PlayArrowFilled, null, tint = Color.White, size = 16.dp)
-                                                Text(compactCount(reel.views), color = Color.White, style = MaterialTheme.typography.labelSmall)
-                                            }
+                                if (posts.loadState.append is LoadState.Loading || posts.loadState.refresh is LoadState.Loading) {
+                                    item(key = "loading") {
+                                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = AbColors.Violet)
                                         }
                                     }
-                                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
-                                Spacer(Modifier.height(2.dp))
+                            }
+                            1 -> {
+                                if (state.reels.isEmpty()) {
+                                    item(key = "no_reels") { EmptyState(title = stringResource(R.string.profile_no_reels), icon = AbIcons.MovieFilter) }
+                                }
+                                items(state.reels.chunked(3).size, key = { "reels_$it" }) { rowIndex ->
+                                    val row = state.reels.chunked(3)[rowIndex]
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        row.forEach { reel ->
+                                            Box(
+                                                Modifier.weight(1f).aspectRatio(9f / 16f).background(AbColors.Charcoal3).clickable { actions.openReel(reel.id) },
+                                            ) {
+                                                AsyncImage(
+                                                    model = reel.coverUrl.takeIf { it.startsWith("http") } ?: reel.videoUrl,
+                                                    contentDescription = reel.caption,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.matchParentSize(),
+                                                )
+                                                Row(Modifier.align(Alignment.BottomStart).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    AbIcon(AbIcons.PlayArrowFilled, null, tint = Color.White, size = 16.dp)
+                                                    Text(compactCount(reel.views), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
+                                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                }
+                            }
+                            else -> {
+                                items(count = posts.itemCount, key = { "media_$it" }) { index ->
+                                    val post = posts[index]
+                                    if (post != null && post.media != null && post.media!!.items.isNotEmpty()) {
+                                        PostCard(
+                                            post = post,
+                                            myUid = state.myUid,
+                                            saved = post.id in state.savedIds,
+                                            actions = postActions,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -319,7 +337,10 @@ private fun ProfileHeader(user: User, state: ProfileUiState, levelCatalog: Level
         }
         Row(Modifier.fillMaxWidth().padding(start = 124.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.End) {
             when {
-                state.isMe -> GlassButton(stringResource(R.string.profile_edit), onClick = actions.editProfile, icon = AbIcons.Edit)
+                state.isMe -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassButton(stringResource(R.string.profile_edit), onClick = actions.editProfile, icon = AbIcons.Edit)
+                    GlassButton(stringResource(R.string.profile_qr), onClick = actions.openQr, icon = AbIcons.QrCode2)
+                }
                 state.blocked -> GlassButton(stringResource(R.string.profile_unblock), onClick = onUnblock, icon = AbIcons.Block)
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.isFollowing) {
@@ -336,9 +357,15 @@ private fun ProfileHeader(user: User, state: ProfileUiState, levelCatalog: Level
             }
         }
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(user.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                if (user.showsVerifiedBadge) VerifiedBadge(gold = user.isGoldVerified, size = 20.dp, modifier = Modifier.padding(start = 6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(user.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                if (user.showsVerifiedBadge) VerifiedBadge(gold = user.isGoldVerified, size = 20.dp)
+                if (!user.equippedTitle.isNullOrBlank()) {
+                    Pill(user.equippedTitle!!, color = AbColors.Gold, textColor = AbColors.BrightGold)
+                }
+                if (user.role.isNotBlank() && user.role != User.ROLE_MEMBER) {
+                    Pill(user.role, color = AbColors.Purple)
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (user.handle.isNotBlank()) Text(user.handle, color = AbColors.TextMuted)

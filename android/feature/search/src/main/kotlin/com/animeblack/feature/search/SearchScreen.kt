@@ -210,13 +210,56 @@ fun SearchScreen(onBack: () -> Unit, navigate: (Any) -> Unit, openMention: (Stri
             if (r.query.length < 2) {
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     item {
-                        GlassCard(Modifier.fillMaxWidth().padding(16.dp), onClick = { navigate(SearchAgentRoute) }) {
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            borderColor = AbColors.Cyan.copy(alpha = 0.35f),
+                            onClick = { navigate(SearchAgentRoute) },
+                        ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AbIcon(AbIcons.AutoAwesome, null, tint = AbColors.Cyan)
-                                Spacer(Modifier.width(10.dp))
-                                Text(stringResource(R.string.search_ask_agent), modifier = Modifier.weight(1f))
-                                AbIcon(AbIcons.ChevronRight, null, tint = AbColors.TextMuted)
+                                com.animeblack.core.designsystem.component.IconTile(
+                                    icon = AbIcons.AutoAwesome,
+                                    size = 40.dp,
+                                    brush = AbColors.CyanVioletGradient,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.search_ask_agent), style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Black)
+                                    Text("اسأل الذكاء الاصطناعي عن توصيات أنمي، مواعيد الحلقات، والتحقق من المعلومات", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                AbIcon(AbIcons.ChevronRight, null, tint = AbColors.Cyan)
                             }
+                        }
+                    }
+                    item {
+                        SectionHeader("✨ استكشاف سريع حسب المزاج", modifier = Modifier.padding(horizontal = 16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "🔥 الرائج الآن",
+                                accentColor = AbColors.Rose,
+                                onClick = {
+                                    viewModel.tab.value = SearchTab.Posts
+                                    viewModel.query.value = "#أنمي"
+                                },
+                            )
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "📺 أنمي الموسم",
+                                accentColor = AbColors.Cyan,
+                                onClick = {
+                                    viewModel.tab.value = SearchTab.Anime
+                                    viewModel.query.value = "One Piece"
+                                },
+                            )
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "🎨 فنون وميمز",
+                                accentColor = AbColors.Gold,
+                                onClick = {
+                                    viewModel.tab.value = SearchTab.Posts
+                                    viewModel.query.value = "#فنون"
+                                },
+                            )
                         }
                     }
                     if (state.trending.isNotEmpty()) {

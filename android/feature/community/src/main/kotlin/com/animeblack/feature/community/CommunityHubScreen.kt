@@ -70,6 +70,7 @@ fun CommunityHubScreen(actions: CommunityHubActions, viewModel: CommunityHubView
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     var createMenu by remember { mutableStateOf(false) }
+    var showEventsTab by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(context.getString(it)) } }
 
     Scaffold(
@@ -101,11 +102,17 @@ fun CommunityHubScreen(actions: CommunityHubActions, viewModel: CommunityHubView
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryTabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent) {
+            PrimaryTabRow(
+                selectedTabIndex = if (showEventsTab) 3 else tab.ordinal,
+                containerColor = Color.Transparent,
+            ) {
                 SpaceTab.entries.forEach { t ->
                     Tab(
-                        selected = tab == t,
-                        onClick = { viewModel.tab.value = t },
+                        selected = !showEventsTab && tab == t,
+                        onClick = {
+                            showEventsTab = false
+                            viewModel.tab.value = t
+                        },
                         text = {
                             Text(
                                 stringResource(
@@ -119,6 +126,11 @@ fun CommunityHubScreen(actions: CommunityHubActions, viewModel: CommunityHubView
                         },
                     )
                 }
+                Tab(
+                    selected = showEventsTab,
+                    onClick = { showEventsTab = true },
+                    text = { Text("الفعاليات") },
+                )
             }
             SearchField(
                 query = query,
@@ -132,30 +144,116 @@ fun CommunityHubScreen(actions: CommunityHubActions, viewModel: CommunityHubView
             }
             val uid = state.myUid
             LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when (tab) {
-                    SpaceTab.Groups -> spaceSections(
-                        items = state.groups,
-                        isMine = { it.isMember(uid) },
-                        key = { it.id },
-                        empty = if (query.isBlank()) R.string.community_empty_groups else R.string.community_no_results,
-                    ) { g ->
-                        GroupCard(g, g.isMember(uid), onOpen = { actions.openGroup(g.id) }, onJoin = { viewModel.joinGroup(g) { actions.openGroup(g.id) } })
+                // Top 3-Stat Summary + 3 Quick Creation Buttons (matches web PAGES.communityHub)
+                item(key = "hub_summary") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Groups,
+                                value = state.groups.size.toString(),
+                                label = "مجموعة",
+                                iconTint = AbColors.Cyan,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showEventsTab = false; viewModel.tab.value = SpaceTab.Groups },
+                            )
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Public,
+                                value = state.worlds.size.toString(),
+                                label = "عالم",
+                                iconTint = AbColors.Purple,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showEventsTab = false; viewModel.tab.value = SpaceTab.Worlds },
+                            )
+                            com.animeblack.core.designsystem.component.StatMiniCard(
+                                icon = AbIcons.Shield,
+                                value = state.communities.size.toString(),
+                                label = "نقابة",
+                                iconTint = AbColors.BrightGold,
+                                valueColor = AbColors.BrightGold,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showEventsTab = false; viewModel.tab.value = SpaceTab.Communities },
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "+ قروب",
+                                icon = AbIcons.GroupAdd,
+                                accentColor = AbColors.Cyan,
+                                modifier = Modifier.weight(1f),
+                                onClick = { actions.create(SpaceKind.Group) },
+                            )
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "+ عالم",
+                                icon = AbIcons.Public,
+                                accentColor = AbColors.Purple,
+                                modifier = Modifier.weight(1f),
+                                onClick = { actions.create(SpaceKind.World) },
+                            )
+                            com.animeblack.core.designsystem.component.GlowChip(
+                                text = "+ نقابة",
+                                icon = AbIcons.Shield,
+                                accentColor = AbColors.Gold,
+                                modifier = Modifier.weight(1f),
+                                onClick = { actions.create(SpaceKind.Community) },
+                            )
+                        }
                     }
-                    SpaceTab.Worlds -> spaceSections(
-                        items = state.worlds,
-                        isMine = { it.isMember(uid) },
-                        key = { it.id },
-                        empty = if (query.isBlank()) R.string.community_empty_worlds else R.string.community_no_results,
-                    ) { w ->
-                        WorldCard(w, w.isMember(uid), onOpen = { actions.openWorld(w.id) }, onJoin = { viewModel.joinWorld(w) { actions.openWorld(w.id) } })
+                }
+
+                if (showEventsTab) {
+                    item(key = "events_list") {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SectionHeader("🏆 البطولات والفعاليات النشطة")
+                            GlassCard(borderColor = AbColors.Gold.copy(alpha = 0.35f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    com.animeblack.core.designsystem.component.IconTile(icon = AbIcons.EmojiEvents, brush = AbColors.GoldGradient)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("حرب النقابات الكبرى • الموسم الخامس", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                        Text("تعاون مع أعضاء نقابتك لجمع نقاط التفاعل والفوز بشارات ذهبية!", style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                                    }
+                                    Pill("جارية", color = AbColors.Emerald)
+                                }
+                            }
+                            GlassCard(borderColor = AbColors.Cyan.copy(alpha = 0.35f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    com.animeblack.core.designsystem.component.IconTile(icon = AbIcons.Palette, brush = AbColors.CyanVioletGradient)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("مسابقة أفضل مراجعة ونظريات أنمي", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                        Text("اكتب تحليلك في مجتمعات الأنمي واحصل على 1,500 عملة ذهبية.", style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                                    }
+                                    Pill("أسبوعي", color = AbColors.Cyan)
+                                }
+                            }
+                        }
                     }
-                    SpaceTab.Communities -> spaceSections(
-                        items = state.communities,
-                        isMine = { it.isMember(uid) },
-                        key = { it.id },
-                        empty = if (query.isBlank()) R.string.community_empty_communities else R.string.community_no_results,
-                    ) { c ->
-                        CommunityCard(c, c.isMember(uid), onOpen = { actions.openCommunity(c.id) }, onJoin = { viewModel.joinCommunity(c) { actions.openCommunity(c.id) } })
+                } else {
+                    when (tab) {
+                        SpaceTab.Groups -> spaceSections(
+                            items = state.groups,
+                            isMine = { it.isMember(uid) },
+                            key = { it.id },
+                            empty = if (query.isBlank()) R.string.community_empty_groups else R.string.community_no_results,
+                        ) { g ->
+                            GroupCard(g, g.isMember(uid), onOpen = { actions.openGroup(g.id) }, onJoin = { viewModel.joinGroup(g) { actions.openGroup(g.id) } })
+                        }
+                        SpaceTab.Worlds -> spaceSections(
+                            items = state.worlds,
+                            isMine = { it.isMember(uid) },
+                            key = { it.id },
+                            empty = if (query.isBlank()) R.string.community_empty_worlds else R.string.community_no_results,
+                        ) { w ->
+                            WorldCard(w, w.isMember(uid), onOpen = { actions.openWorld(w.id) }, onJoin = { viewModel.joinWorld(w) { actions.openWorld(w.id) } })
+                        }
+                        SpaceTab.Communities -> spaceSections(
+                            items = state.communities,
+                            isMine = { it.isMember(uid) },
+                            key = { it.id },
+                            empty = if (query.isBlank()) R.string.community_empty_communities else R.string.community_no_results,
+                        ) { c ->
+                            CommunityCard(c, c.isMember(uid), onOpen = { actions.openCommunity(c.id) }, onJoin = { viewModel.joinCommunity(c) { actions.openCommunity(c.id) } })
+                        }
                     }
                 }
             }
