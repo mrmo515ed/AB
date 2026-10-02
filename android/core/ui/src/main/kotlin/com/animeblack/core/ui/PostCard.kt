@@ -72,17 +72,6 @@ data class PostActions(
     val onRetry: (Post) -> Unit = {},
 )
 
-private data class QuickReactionEmoji(val key: String, val emoji: String)
-
-private val quickReactionEmojis = listOf(
-    QuickReactionEmoji("love", "❤️"),
-    QuickReactionEmoji("fire", "🔥"),
-    QuickReactionEmoji("laugh", "😂"),
-    QuickReactionEmoji("wow", "😮"),
-    QuickReactionEmoji("sad", "😢"),
-    QuickReactionEmoji("clap", "👏"),
-)
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PostCard(
@@ -253,14 +242,14 @@ fun PostCard(
             }
         }
 
-        // Quick 6-Emoji Reaction Bar (matches web postCard reaction bar)
+        // Quick Reaction Bar (vector icons, zero emojis)
         Spacer(Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            quickReactionEmojis.forEach { item ->
+            REACTIONS.forEach { item ->
                 val selected = myReaction == item.key
                 val count = post.reactionCounts[item.key] ?: 0
                 val shape = RoundedCornerShape(50)
@@ -268,19 +257,19 @@ fun PostCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(shape)
-                        .background(if (selected) AbColors.Cyan.copy(alpha = 0.20f) else AbColors.Ink.copy(alpha = 0.55f))
-                        .border(1.dp, if (selected) AbColors.Cyan else Color(0x1AFFFFFF), shape)
+                        .background(if (selected) item.color.copy(alpha = 0.22f) else AbColors.Ink.copy(alpha = 0.55f))
+                        .border(1.dp, if (selected) item.color else Color(0x1AFFFFFF), shape)
                         .clickable { actions.onReact(post, item.key) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
-                    Text(text = item.emoji, fontSize = 13.sp)
+                    AbIcon(item.icon, null, tint = if (selected) item.color else item.color.copy(alpha = 0.85f), size = 15.dp)
                     if (count > 0 || selected) {
-                        Spacer(Modifier.width(3.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
                             text = (if (selected && count == 0) 1 else count).toString(),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (selected) AbColors.Cyan else AbColors.TextSecondary,
+                            color = if (selected) item.color else AbColors.TextSecondary,
                         )
                     }
                 }
@@ -353,12 +342,12 @@ fun PostCard(
 @Composable
 private fun CategoryPill(category: String) {
     val (label, color) = when (category.lowercase()) {
-        "anime", "أنمي" -> "📺 أنمي" to AbColors.Cyan
-        "manga", "مانجا" -> "📖 مانجا" to AbColors.Purple
-        "art", "فنون", "fanart" -> "🎨 فنون" to AbColors.Rose
-        "memes", "meme", "ميمز" -> "😂 ميمز" to AbColors.Gold
-        "review", "مراجعة", "مراجعات" -> "🎬 مراجعة" to AbColors.Emerald
-        "theory", "نظريات" -> "🧠 نظريات" to AbColors.Blue
+        "anime", "أنمي" -> "أنمي" to AbColors.Cyan
+        "manga", "مانجا" -> "مانجا" to AbColors.Purple
+        "art", "فنون", "fanart" -> "فنون" to AbColors.Rose
+        "memes", "meme", "ميمز" -> "ميمز" to AbColors.Gold
+        "review", "مراجعة", "مراجعات" -> "مراجعة" to AbColors.Emerald
+        "theory", "نظريات" -> "نظريات" to AbColors.Blue
         else -> category to AbColors.Purple
     }
     Pill(label, color = color)

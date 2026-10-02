@@ -203,7 +203,7 @@ fun CommunityHubScreen(actions: CommunityHubActions, viewModel: CommunityHubView
                 if (showEventsTab) {
                     item(key = "events_list") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            SectionHeader("🏆 البطولات والفعاليات النشطة")
+                            SectionHeader("البطولات والفعاليات النشطة")
                             GlassCard(borderColor = AbColors.Gold.copy(alpha = 0.35f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     com.animeblack.core.designsystem.component.IconTile(icon = AbIcons.EmojiEvents, brush = AbColors.GoldGradient)

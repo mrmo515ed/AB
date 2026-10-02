@@ -8,6 +8,7 @@ import com.animeblack.core.common.util.Ids
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
 import com.animeblack.core.data.firebase.dataEstimated
 import com.animeblack.core.data.firebase.requireUid
@@ -289,7 +290,7 @@ class FirestoreCommunityRepository @Inject constructor(
 
     override fun observeRoomMessages(room: RoomRef, limit: Long): Flow<List<ChatMessage>> {
         val live = roomMessages(room).orderBy("at", Query.Direction.DESCENDING).limit(limit).asFlow(includeMetadata = true).map { snap ->
-            snap.documents.mapNotNull { d -> d.dataEstimated()?.toChatMessage(d.id, room.id, d.metadata.hasPendingWrites()) }
+            snap.documents.mapNotNull { d -> d.dataEstimated()?.toChatMessage(d.id, room.id, pending = false) }
         }
         val legacy: Flow<List<ChatMessage>> = if (room is RoomRef.ChannelRoom) {
             observeCommunity(room.communityId).map { c -> c?.channels?.firstOrNull { it.id == room.channelId }?.legacyMessages.orEmpty() }
@@ -297,7 +298,7 @@ class FirestoreCommunityRepository @Inject constructor(
             flowOf(emptyList())
         }
         val pending = outbox.observe().map { ops ->
-            val uid = auth.currentUser?.uid.orEmpty()
+            val uid = auth.activeUid().orEmpty()
             ops.filter { it.type == OutboxTypes.ROOM_MEDIA }.mapNotNull { op ->
                 val p = try {
                     outbox.json.decodeFromString(RoomMediaPayload.serializer(), op.payload)

@@ -6,10 +6,13 @@ import com.animeblack.core.common.result.AppError
 import com.animeblack.core.common.result.AppResult
 import com.animeblack.core.common.result.runCatchingApp
 import com.animeblack.core.common.util.Validators
+import com.animeblack.core.data.firebase.ActiveSessionHolder
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.mapper.toUser
 import com.animeblack.core.data.mapper.toUserState
@@ -49,7 +52,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.coroutines.tasks.await
 
 @Singleton
 class FirestoreUserRepository @Inject constructor(
@@ -65,13 +67,43 @@ class FirestoreUserRepository @Inject constructor(
 
     private val users get() = firestore.collection(Collections.USERS)
     private val userFlows = ConcurrentHashMap<String, Flow<User?>>()
+    private val userCache = ConcurrentHashMap<String, User>()
 
     private val uidFlow: Flow<String?> by lazy {
         authRepository.get().authState.map { (it as? AuthState.SignedIn)?.uid }.distinctUntilChanged()
     }
 
     override fun observeMe(): Flow<User?> = uidFlow.flatMapLatest { uid ->
-        if (uid == null) flowOf(null) else observeUser(uid)
+        if (uid == null) {
+            flowOf(null)
+        } else {
+            observeUser(uid).map { u -> u ?: fallbackUserFor(uid) }
+        }
+    }
+
+    private fun fallbackUserFor(uid: String): User {
+        userCache[uid]?.let { return it }
+        val fb = auth.currentUser
+        val name = fb?.displayName?.takeIf { it.isNotBlank() }
+            ?: ActiveSessionHolder.fallbackName
+            ?: "أوتاكو أنمي بلاك"
+        val username = ActiveSessionHolder.fallbackUsername
+            ?: Validators.defaultUsername(fb?.email, uid)
+        return User(
+            id = uid,
+            name = name,
+            username = username,
+            email = fb?.email.orEmpty(),
+            avatar = fb?.photoUrl?.toString() ?: FirebaseAuthRepository.DEFAULT_AVATAR,
+            bio = "عضو في مجتمع أنمي بلاك",
+            level = 1,
+            xp = 0,
+            xpNext = 100,
+            coins = 150,
+            stars = 10,
+            reputation = 15,
+            badges = listOf("badge_rookie"),
+        ).also { userCache[uid] = it }
     }
 
     /** One shared listener per user id, kept alive 5 s after the last subscriber (no duplicates). */
@@ -79,8 +111,11 @@ class FirestoreUserRepository @Inject constructor(
         if (uid.isBlank()) return flowOf(null)
         return userFlows.getOrPut(uid) {
             users.document(uid).asFlow()
-                .map { snap -> snap.data?.toUser(snap.id) }
-                .catch { emit(null) }
+                .map { snap ->
+                    snap.data?.toUser(snap.id)?.also { userCache[uid] = it }
+                        ?: if (uid == auth.activeUid()) fallbackUserFor(uid) else userCache[uid]
+                }
+                .catch { emit(if (uid == auth.activeUid()) fallbackUserFor(uid) else userCache[uid]) }
                 .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
         }
     }
@@ -90,35 +125,41 @@ class FirestoreUserRepository @Inject constructor(
         if (ids.isEmpty()) return flowOf(emptyMap())
         val chunks = ids.chunked(30).map { chunk ->
             users.whereIn(FieldPath.documentId(), chunk).asFlow()
-                .map { snap -> snap.documents.mapNotNull { d -> d.data?.toUser(d.id) } }
+                .map { snap ->
+                    snap.documents.mapNotNull { d ->
+                        d.data?.toUser(d.id)?.also { userCache[d.id] = it }
+                    }
+                }
                 .catch { emit(emptyList()) }
         }
         return combine(chunks) { lists -> lists.flatMap { it.toList() }.associateBy { it.id } }
     }
 
-    override suspend fun getUser(uid: String): User? = try {
-        val snap = users.document(uid).get().await()
-        snap.data?.toUser(snap.id)
-    } catch (_: Exception) {
-        null
+    override suspend fun getUser(uid: String): User? {
+        if (uid.isBlank()) return null
+        userCache[uid]?.let { return it }
+        val snap = users.document(uid).getFast(timeoutMs = 1_800L, preferCache = true)
+        val fromSnap = snap?.data?.toUser(snap.id)?.also { userCache[uid] = it }
+        if (fromSnap != null) return fromSnap
+        return if (uid == auth.activeUid()) fallbackUserFor(uid) else null
     }
 
     override suspend fun searchUsers(query: String, limit: Int): AppResult<List<User>> = runCatchingApp(errorMapper) {
         val q = query.trim().removePrefix("@")
         if (q.length < 2) return@runCatchingApp emptyList()
         val lower = q.lowercase()
-        val byUsername = users.orderBy("username").startAt(lower).endAt(lower + "\uf8ff").limit(limit.toLong()).get().await()
-        val byName = users.orderBy("name").startAt(q).endAt(q + "\uf8ff").limit(limit.toLong()).get().await()
-        (byUsername.documents + byName.documents)
+        val byUsername = users.orderBy("username").startAt(lower).endAt(lower + "\uf8ff").limit(limit.toLong()).getFast()
+        val byName = users.orderBy("name").startAt(q).endAt(q + "\uf8ff").limit(limit.toLong()).getFast()
+        (byUsername?.documents.orEmpty() + byName?.documents.orEmpty())
             .distinctBy { it.id }
-            .mapNotNull { d -> d.data?.toUser(d.id) }
+            .mapNotNull { d -> d.data?.toUser(d.id)?.also { userCache[d.id] = it } }
             .take(limit)
     }
 
     override fun observeSuggestedUsers(limit: Int): Flow<List<User>> =
         combine(
             users.orderBy("joined", Query.Direction.DESCENDING).limit((limit + 20).toLong()).asFlow()
-                .map { snap -> snap.documents.mapNotNull { d -> d.data?.toUser(d.id) } }
+                .map { snap -> snap.documents.mapNotNull { d -> d.data?.toUser(d.id)?.also { userCache[d.id] = it } } }
                 .catch { emit(emptyList()) },
             observeUserState(),
             uidFlow,
@@ -130,15 +171,15 @@ class FirestoreUserRepository @Inject constructor(
         observeUser(uid).flatMapLatest { user ->
             val ids = if (followers) user?.followersList.orEmpty() else user?.followingList.orEmpty()
             val unique = ids.distinct().take(300)
-            observeUsers(unique).map { map -> unique.mapNotNull { map[it] } }
+            observeUsers(unique).map { map -> unique.mapNotNull { map[it] ?: userCache[it] } }
         }
 
     override suspend fun isUsernameAvailable(username: String): AppResult<Boolean> = runCatchingApp(errorMapper) {
         val normalized = Validators.normalizeUsername(username)
         if (!Validators.isValidUsername(normalized)) throw AppErrorException(AppError.Validation("username", "invalid"))
-        val me = auth.currentUser?.uid
-        val snap = users.whereEqualTo("username", normalized).limit(2).get().await()
-        snap.documents.none { it.id != me }
+        val me = auth.activeUid()
+        val snap = users.whereEqualTo("username", normalized).limit(2).getFast(timeoutMs = 1_800L)
+        snap?.documents?.none { it.id != me } ?: true
     }
 
     override suspend fun updateProfile(update: ProfileUpdate): AppResult<Unit> = runCatchingApp(errorMapper) {
@@ -161,6 +202,18 @@ class FirestoreUserRepository @Inject constructor(
         if (fields.isNotEmpty()) {
             fields["updatedAt"] = System.currentTimeMillis()
             users.document(uid).set(fields, SetOptions.merge())
+            userCache.compute(uid) { _, prev ->
+                val base = prev ?: fallbackUserFor(uid)
+                base.copy(
+                    name = update.name?.trim()?.take(50) ?: base.name,
+                    username = update.username?.let(Validators::normalizeUsername) ?: base.username,
+                    bio = update.bio?.trim()?.take(300) ?: base.bio,
+                    location = update.location?.trim()?.take(80) ?: base.location,
+                    website = update.website?.trim()?.take(200) ?: base.website,
+                    favAnimeName = update.favAnimeName?.trim()?.take(80) ?: base.favAnimeName,
+                    favStudio = update.favStudio?.trim()?.take(80) ?: base.favStudio,
+                )
+            }
             update.name?.let { name ->
                 auth.currentUser?.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(name.trim()).build())
             }
@@ -203,10 +256,6 @@ class FirestoreUserRepository @Inject constructor(
         Unit
     }
 
-    /**
-     * Follow = three idempotent writes in one batch (my following list/count, the target's
-     * followers list/count — keys the rules allow peers to change — and my private user state).
-     */
     override suspend fun follow(uid: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         val me = auth.requireUid()
         if (uid == me) throw AppErrorException(AppError.Validation("follow", "self"))
@@ -215,7 +264,7 @@ class FirestoreUserRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val batch = firestore.batch()
         batch.set(users.document(me), mapOf("following_list" to FieldValue.arrayUnion(uid), "following" to FieldValue.increment(1), "updatedAt" to now), SetOptions.merge())
-        batch.update(users.document(uid), mapOf("followers_list" to FieldValue.arrayUnion(me), "followers" to FieldValue.increment(1), "updatedAt" to now))
+        batch.set(users.document(uid), mapOf("followers_list" to FieldValue.arrayUnion(me), "followers" to FieldValue.increment(1), "updatedAt" to now), SetOptions.merge())
         batch.set(firestore.collection(Collections.USER_STATES).document(me), mapOf("uid" to me, "following" to FieldValue.arrayUnion(uid), "following_list" to FieldValue.arrayUnion(uid), "updatedAt" to now), SetOptions.merge())
         batch.commit()
         val myName = getUser(me)?.displayName.orEmpty()
@@ -227,7 +276,7 @@ class FirestoreUserRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val batch = firestore.batch()
         batch.set(users.document(me), mapOf("following_list" to FieldValue.arrayRemove(uid), "following" to FieldValue.increment(-1), "updatedAt" to now), SetOptions.merge())
-        batch.update(users.document(uid), mapOf("followers_list" to FieldValue.arrayRemove(me), "followers" to FieldValue.increment(-1), "updatedAt" to now))
+        batch.set(users.document(uid), mapOf("followers_list" to FieldValue.arrayRemove(me), "followers" to FieldValue.increment(-1), "updatedAt" to now), SetOptions.merge())
         batch.set(firestore.collection(Collections.USER_STATES).document(me), mapOf("following" to FieldValue.arrayRemove(uid), "following_list" to FieldValue.arrayRemove(uid), "updatedAt" to now), SetOptions.merge())
         batch.commit()
         Unit
@@ -244,7 +293,6 @@ class FirestoreUserRepository @Inject constructor(
                         .catch { emit(UserState()) },
                     observeUser(uid),
                 ) { state, user ->
-                    // Following is mirrored in users/{uid}.following_list by the web app.
                     state.copy(following = (state.following + user?.followingList.orEmpty()).distinct())
                 }
             }

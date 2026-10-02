@@ -9,8 +9,11 @@ import com.animeblack.core.common.util.Validators
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
 import com.animeblack.core.data.firebase.dataEstimated
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.mapper.toChatMessage
 import com.animeblack.core.data.mapper.toChatRequest
@@ -67,7 +70,7 @@ class FirestoreChatRepository @Inject constructor(
 
     // ------------------------------------------------------------------ conversations
     override fun observeConversations(): Flow<List<Conversation>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return chats.whereArrayContains("participants", uid).asFlow().map { snap ->
             snap.documents.mapNotNull { d -> d.data?.toConversation(d.id, uid) }
                 .filter { !it.deleted && it.partnerId.isNotBlank() && it.partnerId != uid }
@@ -77,25 +80,25 @@ class FirestoreChatRepository @Inject constructor(
     }
 
     override fun observeConversation(chatId: String): Flow<Conversation?> {
-        val uid = auth.currentUser?.uid ?: return flowOf(null)
+        val uid = auth.activeUid() ?: return flowOf(null)
         return chats.document(chatId).asFlow().map { it.data?.toConversation(it.id, uid) }.catch { emit(null) }
     }
 
     // ------------------------------------------------------------------ messages
     override fun observeMessages(chatId: String, limit: Long): Flow<List<ChatMessage>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return messages(chatId).orderBy("at", Query.Direction.DESCENDING).limit(limit)
             .asFlow(includeMetadata = true)
             .map { snap ->
                 snap.documents.mapNotNull { d ->
-                    d.dataEstimated()?.toChatMessage(d.id, chatId, d.metadata.hasPendingWrites())
+                    d.dataEstimated()?.toChatMessage(d.id, chatId, pending = false)
                 }.filter { it.isVisibleTo(uid) }.sortedBy { it.at }
             }
     }
 
     /** Attachment messages still in the outbox (uploading or failed) rendered in the chat. */
     override fun observePendingMedia(chatId: String): Flow<List<ChatMessage>> = outbox.observe().map { ops ->
-        val uid = auth.currentUser?.uid.orEmpty()
+        val uid = auth.activeUid().orEmpty()
         ops.filter { it.type == OutboxTypes.CHAT_MEDIA }.mapNotNull { op ->
             val p = try {
                 outbox.json.decodeFromString(ChatMediaPayload.serializer(), op.payload)
@@ -123,24 +126,20 @@ class FirestoreChatRepository @Inject constructor(
 
     override suspend fun loadOlder(chatId: String, beforeAt: Long, pageSize: Long): AppResult<List<ChatMessage>> = runCatchingApp(errorMapper) {
         val uid = auth.requireUid()
-        messages(chatId).orderBy("at", Query.Direction.DESCENDING).whereLessThan("at", beforeAt).limit(pageSize).get().await()
-            .documents.mapNotNull { d -> d.dataEstimated()?.toChatMessage(d.id, chatId) }
+        messages(chatId).orderBy("at", Query.Direction.DESCENDING).whereLessThan("at", beforeAt).limit(pageSize).getFast(timeoutMs = 2_500L)
+            ?.documents.orEmpty().mapNotNull { d -> d.dataEstimated()?.toChatMessage(d.id, chatId) }
             .filter { it.isVisibleTo(uid) }
             .sortedBy { it.at }
     }
 
     // ------------------------------------------------------------------ permissions (web canDirectMessage)
     override suspend fun dmPermission(partnerId: String): DmPermission {
-        val me = auth.currentUser?.uid ?: return DmPermission.Blocked
+        val me = auth.activeUid() ?: return DmPermission.Blocked
         if (partnerId == me) return DmPermission.Self
         val state = users.observeUserState().first()
         if (partnerId in state.blocked) return DmPermission.Blocked
         val partner = users.getUser(partnerId) ?: return DmPermission.Allowed
-        val existing = try {
-            chats.document(Conversation.canonicalId(me, partnerId)).get().await()
-        } catch (_: Exception) {
-            null
-        }
+        val existing = chats.document(Conversation.canonicalId(me, partnerId)).getFast(timeoutMs = 1_200L, preferCache = true)
         if (existing != null && existing.exists() && (existing.getString("last")?.isNotBlank() == true)) return DmPermission.Allowed
         val iFollow = partnerId in state.following
         val partnerFollowsMe = me in partner.followingList
@@ -357,21 +356,20 @@ class FirestoreChatRepository @Inject constructor(
 
     /** Deletes the conversation for both participants (web `executeDeleteChatBoth`). */
     override suspend fun deleteConversation(chatId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        while (true) {
-            val page = messages(chatId).limit(400).get().await()
-            if (page.isEmpty) break
+        val page = messages(chatId).limit(400).getFast(timeoutMs = 1_500L, preferCache = true)
+        if (page != null && !page.isEmpty) {
             val batch = firestore.batch()
             page.documents.forEach { batch.delete(it.reference) }
-            batch.commit().await()
+            batch.commit().awaitWrite()
         }
-        chats.document(chatId).delete().await()
+        chats.document(chatId).delete().awaitWrite()
         Unit
     }
 
     override suspend fun retryFailed(chatId: String) = outbox.retryFailed()
 
     override suspend fun resolveMediaUrl(attachmentSrc: String, storagePath: String?): String {
-        if (attachmentSrc.isNotBlank() && !attachmentSrc.startsWith("data:")) return attachmentSrc
+        if (attachmentSrc.isNotBlank()) return attachmentSrc
         val path = storagePath ?: return attachmentSrc
         signedUrlCache[path]?.let { (url, expires) -> if (System.currentTimeMillis() < expires) return url }
         return try {
@@ -386,14 +384,14 @@ class FirestoreChatRepository @Inject constructor(
 
     // ------------------------------------------------------------------ requests
     override fun observeIncomingRequests(): Flow<List<ChatRequest>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return firestore.collection(Collections.CHAT_REQUESTS).whereEqualTo("toUid", uid).asFlow()
             .map { snap -> snap.documents.mapNotNull { d -> d.data?.toChatRequest(d.id) }.filter { it.status == "pending" }.sortedByDescending { it.at } }
             .catch { emit(emptyList()) }
     }
 
     override fun observeOutgoingRequests(): Flow<List<ChatRequest>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return firestore.collection(Collections.CHAT_REQUESTS).whereEqualTo("fromUid", uid).asFlow()
             .map { snap -> snap.documents.mapNotNull { d -> d.data?.toChatRequest(d.id) }.sortedByDescending { it.at } }
             .catch { emit(emptyList()) }

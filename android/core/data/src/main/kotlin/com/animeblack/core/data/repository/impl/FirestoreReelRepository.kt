@@ -53,7 +53,12 @@ class FirestoreReelRepository @Inject constructor(
             reels.orderBy("createdAt", Query.Direction.DESCENDING).limit(60).asFlow()
                 .map { snap -> snap.documents.mapNotNull { d -> d.data?.toReel(d.id) } },
             users.observeUserState(),
-        ) { list, state -> list.filter { it.authorId !in state.blocked && it.videoUrl.startsWith("http") } }
+        ) { list, state ->
+            list.filter {
+                it.authorId !in state.blocked &&
+                    (it.videoUrl.startsWith("http") || it.videoUrl.startsWith("file:") || it.videoUrl.startsWith("content:") || it.videoUrl.startsWith("data:"))
+            }
+        }
 
     override fun observeReel(id: String): Flow<Reel?> = reels.document(id).asFlow().map { it.data?.toReel(it.id) }
 

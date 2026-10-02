@@ -15,7 +15,9 @@ import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
 import com.animeblack.core.data.firebase.dataEstimated
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.firebase.str
 import com.animeblack.core.data.firebase.toStringKeyed
@@ -87,7 +89,7 @@ class FirestorePostRepository @Inject constructor(
     @Volatile private var lastOlderDoc: DocumentSnapshot? = null
 
     private fun DocumentSnapshot.toPostOrNull(): Post? =
-        dataEstimated()?.takeIf { it.isNotEmpty() }?.toPost(id, metadata.hasPendingWrites())
+        dataEstimated()?.takeIf { it.isNotEmpty() }?.toPost(id, pending = false)
 
     // ------------------------------------------------------------------ feed
     override fun observeFeed(): Flow<FeedState> {
@@ -126,10 +128,14 @@ class FirestorePostRepository @Inject constructor(
         val cursor = lastOlderDoc ?: lastHeadDoc ?: return@runCatchingApp
         loadingMore.value = true
         try {
-            val snap = feedQuery.startAfter(cursor).limit(PAGE_SIZE).get().await()
-            lastOlderDoc = snap.documents.lastOrNull() ?: lastOlderDoc
-            older.value = older.value + snap.documents.mapNotNull { it.toPostOrNull() }
-            if (snap.size() < PAGE_SIZE) hasMore.value = false
+            val snap = feedQuery.startAfter(cursor).limit(PAGE_SIZE).getFast(timeoutMs = 2_500L)
+            if (snap != null) {
+                lastOlderDoc = snap.documents.lastOrNull() ?: lastOlderDoc
+                older.value = older.value + snap.documents.mapNotNull { it.toPostOrNull() }
+                if (snap.size() < PAGE_SIZE) hasMore.value = false
+            } else {
+                hasMore.value = false
+            }
         } finally {
             loadingMore.value = false
         }
@@ -301,11 +307,7 @@ class FirestorePostRepository @Inject constructor(
 
     /** Raw array element of the current user in `likedUsers` (needed for an exact arrayRemove). */
     private suspend fun myLikeElement(postId: String, uid: String): Any? {
-        val snap = try {
-            posts.document(postId).get(Source.CACHE).await()
-        } catch (_: Exception) {
-            posts.document(postId).get().await()
-        }
+        val snap = posts.document(postId).getFast(timeoutMs = 1_200L, preferCache = true) ?: return null
         val list = snap.get("likedUsers") as? List<*> ?: return null
         return list.firstOrNull { e ->
             when (e) {
@@ -395,11 +397,7 @@ class FirestorePostRepository @Inject constructor(
 
     private suspend fun notifyMentions(user: User, usernames: List<String>, postId: String, title: String, text: String) {
         for (username in usernames.take(10)) {
-            val target = try {
-                firestore.collection(Collections.USERS).whereEqualTo("username", username).limit(1).get().await().documents.firstOrNull()?.id
-            } catch (_: Exception) {
-                null
-            }
+            val target = firestore.collection(Collections.USERS).whereEqualTo("username", username).limit(1).getFast(timeoutMs = 1_200L)?.documents?.firstOrNull()?.id
             if (target != null && target != user.id) {
                 notifications.notifyUser(target, "mention", title, "${user.displayName} أشار إليك: \"${text.take(50)}\"", postId = postId, link = "postDetail:$postId")
             }
@@ -407,7 +405,7 @@ class FirestorePostRepository @Inject constructor(
     }
 
     override suspend fun deleteComment(postId: String, commentId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        val snap = posts.document(postId).get().await()
+        val snap = posts.document(postId).getFast(timeoutMs = 1_500L, preferCache = true) ?: return@runCatchingApp
         val raw = (snap.get("comments") as? List<*>)?.firstOrNull { e ->
             (e as? Map<*, *>)?.let { m -> m.toStringKeyed().str("id") == commentId } == true
         } ?: return@runCatchingApp
@@ -420,24 +418,22 @@ class FirestorePostRepository @Inject constructor(
     override suspend fun toggleCommentLike(postId: String, commentId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         val uid = auth.requireUid()
         val ref = posts.document(postId)
-        firestore.runTransaction { tx ->
-            val comments = (tx.get(ref).get("comments") as? List<*>).orEmpty()
-            var changed = false
-            val updated = comments.map { raw ->
-                val map = (raw as? Map<*, *>)?.toStringKeyed() ?: return@map raw
-                val parsed = map.toComment()
-                if (parsed.id != commentId) return@map raw
-                changed = true
-                val liked = uid in parsed.likedBy
-                map.toMutableMap().apply {
-                    put("id", parsed.id)
-                    put("likedBy", if (liked) parsed.likedBy - uid else parsed.likedBy + uid)
-                    put("likes", (parsed.likes + if (liked) -1 else 1).coerceAtLeast(0))
-                }
+        val snap = ref.getFast(timeoutMs = 1_500L, preferCache = true) ?: return@runCatchingApp
+        val comments = (snap.get("comments") as? List<*>).orEmpty()
+        var changed = false
+        val updated = comments.map { raw ->
+            val map = (raw as? Map<*, *>)?.toStringKeyed() ?: return@map raw
+            val parsed = map.toComment()
+            if (parsed.id != commentId) return@map raw
+            changed = true
+            val liked = uid in parsed.likedBy
+            map.toMutableMap().apply {
+                put("id", parsed.id)
+                put("likedBy", if (liked) parsed.likedBy - uid else parsed.likedBy + uid)
+                put("likes", (parsed.likes + if (liked) -1 else 1).coerceAtLeast(0))
             }
-            if (changed) tx.update(ref, mapOf("comments" to updated, "updatedAt" to System.currentTimeMillis()))
-            null
-        }.await()
+        }
+        if (changed) ref.update(mapOf("comments" to updated, "updatedAt" to System.currentTimeMillis())).awaitWrite()
         Unit
     }
 
@@ -471,12 +467,12 @@ class FirestorePostRepository @Inject constructor(
         val q = query.trim()
         if (q.isEmpty()) return@runCatchingApp emptyList()
         if (q.startsWith("#") && q.length > 1) {
-            posts.whereArrayContains("tags", q.removePrefix("#")).limit(60).get().await()
-                .documents.mapNotNull { it.toPostOrNull() }.sortedByDescending { it.createdAt }
+            posts.whereArrayContains("tags", q.removePrefix("#")).limit(60).getFast(timeoutMs = 2_500L)
+                ?.documents.orEmpty().mapNotNull { it.toPostOrNull() }.sortedByDescending { it.createdAt }
         } else {
             val needle = q.lowercase()
-            withTimeout(15_000) { feedQuery.limit(SEARCH_WINDOW).get().await() }
-                .documents.mapNotNull { it.toPostOrNull() }
+            feedQuery.limit(SEARCH_WINDOW).getFast(timeoutMs = 2_500L)
+                ?.documents.orEmpty().mapNotNull { it.toPostOrNull() }
                 .filter { p ->
                     p.text.lowercase().contains(needle) ||
                         p.author.name.lowercase().contains(needle) ||
@@ -486,16 +482,14 @@ class FirestorePostRepository @Inject constructor(
         }
     }
 
-    override fun observeTrendingTags(): Flow<List<Pair<String, Int>>> = flow {
-        val snap = try {
-            feedQuery.limit(150).get().await()
-        } catch (_: Exception) {
-            null
-        }
-        val counts = HashMap<String, Int>()
-        snap?.documents?.mapNotNull { it.toPostOrNull() }?.forEach { p -> p.tags.forEach { t -> counts[t] = (counts[t] ?: 0) + 1 } }
-        emit(counts.entries.sortedByDescending { it.value }.take(12).map { it.key to it.value })
-    }
+    override fun observeTrendingTags(): Flow<List<Pair<String, Int>>> =
+        feedQuery.limit(120).asFlow()
+            .map { snap ->
+                val counts = HashMap<String, Int>()
+                snap.documents.mapNotNull { it.toPostOrNull() }.forEach { p -> p.tags.forEach { t -> counts[t] = (counts[t] ?: 0) + 1 } }
+                counts.entries.sortedByDescending { it.value }.take(12).map { it.key to it.value }
+            }
+            .catch { emit(emptyList()) }
 
     companion object {
         const val HEAD_SIZE = 25L
@@ -516,12 +510,13 @@ class FirestorePostPagingSource(private val query: Query) : PagingSource<Documen
 
     override suspend fun load(params: LoadParams<DocumentSnapshot>): LoadResult<DocumentSnapshot, Post> = try {
         val base = query.limit(params.loadSize.toLong())
-        val snap = (params.key?.let { base.startAfter(it) } ?: base).get().await()
-        val items = snap.documents.mapNotNull { d -> d.dataEstimated()?.toPost(d.id, d.metadata.hasPendingWrites()) }
+        val snap = (params.key?.let { base.startAfter(it) } ?: base).getFast(timeoutMs = 2_500L)
+        val docs = snap?.documents.orEmpty()
+        val items = docs.mapNotNull { d -> d.dataEstimated()?.toPost(d.id, pending = false) }
         LoadResult.Page(
             data = items,
             prevKey = null,
-            nextKey = if (snap.size() < params.loadSize) null else snap.documents.lastOrNull(),
+            nextKey = if (docs.size < params.loadSize) null else docs.lastOrNull(),
         )
     } catch (e: Exception) {
         LoadResult.Error(e)

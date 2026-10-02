@@ -135,12 +135,12 @@ private enum class FeedSortMode(val label: String, val icon: Int) {
 
 private val feedCategories = listOf(
     "" to "الكل",
-    "أنمي" to "📺 أنمي",
-    "مانجا" to "📖 مانجا",
-    "فنون" to "🎨 فنون",
-    "ميمز" to "😂 ميمز",
-    "مراجعة" to "🎬 مراجعة",
-    "نظريات" to "🧠 نظريات",
+    "أنمي" to "أنمي",
+    "مانجا" to "مانجا",
+    "فنون" to "فنون",
+    "ميمز" to "ميمز",
+    "مراجعة" to "مراجعة",
+    "نظريات" to "نظريات",
 )
 
 private val trendingHomeTags = listOf(
@@ -635,9 +635,9 @@ private fun ModeratorQuickBar(onOpenAdmin: () -> Unit) {
 private fun ActiveEventsStrip(navigator: HomeNavigator) {
     val events = remember {
         listOf(
-            Triple("🏆 بطولة صيد الأنمي الأسبوعية", "جوائز 5,000 عملة ذهبية وألقاب حصرية", AbColors.Gold to navigator.openGames),
-            Triple("🎨 مسابقة أفضل فان آرت وميمز", "شارك إبداعك في الموجز واحصل على نجوم", AbColors.Pink to { navigator.createPost(null) }),
-            Triple("⚔️ حرب النقابات الكبرى", "انضم لنقابتك وارفع ترتيبها في المجتمع", AbColors.Cyan to navigator.openCommunity),
+            Triple("بطولة صيد الأنمي الأسبوعية", "جوائز 5,000 عملة ذهبية وألقاب حصرية", AbColors.Gold to navigator.openGames),
+            Triple("مسابقة أفضل فان آرت وميمز", "شارك إبداعك في الموجز واحصل على نجوم", AbColors.Pink to { navigator.createPost(null) }),
+            Triple("حرب النقابات الكبرى", "انضم لنقابتك وارفع ترتيبها في المجتمع", AbColors.Cyan to navigator.openCommunity),
         )
     }
     LazyRow(
@@ -721,7 +721,7 @@ private fun HomeDashboardWidget(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "أهلاً بك، ${me?.displayName?.ifBlank { "أوتاكو" } ?: "أوتاكو"} ✨",
+                        text = "أهلاً بك، ${me?.displayName?.ifBlank { "أوتاكو" } ?: "أوتاكو"}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
@@ -734,7 +734,8 @@ private fun HomeDashboardWidget(
                 }
                 Spacer(Modifier.width(8.dp))
                 GradientButton(
-                    text = "🎁 مكافأة اليوم",
+                    text = "مكافأة اليوم",
+                    icon = AbIcons.CardGiftcard,
                     onClick = onClaimDaily,
                     loading = claimingDaily,
                     brush = AbColors.GoldGradient,

@@ -284,12 +284,12 @@ fun CreatePostScreen(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(
                     "" to "عام",
-                    "أنمي" to "📺 أنمي",
-                    "مانجا" to "📖 مانجا",
-                    "فنون" to "🎨 فنون",
-                    "ميمز" to "😂 ميمز",
-                    "مراجعة" to "🎬 مراجعة",
-                    "نظريات" to "🧠 نظريات",
+                    "أنمي" to "أنمي",
+                    "مانجا" to "مانجا",
+                    "فنون" to "فنون",
+                    "ميمز" to "ميمز",
+                    "مراجعة" to "مراجعة",
+                    "نظريات" to "نظريات",
                 ).forEach { (key, label) ->
                     FilterChip(
                         selected = state.category == key,

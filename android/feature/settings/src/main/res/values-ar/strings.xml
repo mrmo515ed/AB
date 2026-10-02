@@ -90,7 +90,7 @@
     <string name="set_guest_save">حفظ الحساب</string>
     <string name="set_server">خادم الذكاء الاصطناعي</string>
     <string name="set_google_signin">تسجيل الدخول بجوجل</string>
-    <string name="set_google_ready">جاهز ✔</string>
+    <string name="set_google_ready">جاهز</string>
     <string name="set_google_sha_missing">يحتاج تسجيل بصمة SHA-1 في Firebase</string>
     <string name="set_google_hint">يعمل تسجيل الدخول بجوجل بعد تسجيل بصمة SHA-1 لهذا التطبيق في Firebase (Project settings ← Your apps ← Add fingerprint) ثم تنزيل google-services.json من جديد.</string>
     <string name="set_server_title">خادم الذكاء الاصطناعي (وكيل البحث)</string>
@@ -104,7 +104,7 @@
     <string name="set_server_saved">تم حفظ عنوان الخادم</string>
     <string name="set_server_reset_done">تمت استعادة العنوان المدمج</string>
     <string name="set_server_invalid">أدخل عنوان https:// (يُسمح بـ http://localhost أو 10.0.2.2 في نسخ التطوير فقط)</string>
-    <string name="set_server_ok">الخادم متاح ✔</string>
+    <string name="set_server_ok">الخادم متاح</string>
     <string name="set_server_fail">الخادم غير متاح — تحقق من العنوان</string>
     <string name="set_server_testing">جارٍ الاختبار…</string>
     <string name="set_server_token">توكن API (اختياري)</string>
@@ -112,7 +112,7 @@
     <string name="set_server_ok_no_key">الخادم متاح لكن مفتاح الذكاء الاصطناعي غير مضبوط عليه بعد</string>
     <string name="set_server_test_agent">اختبار الوكيل الذكي</string>
     <string name="set_server_agent_testing">جارٍ سؤال الوكيل…</string>
-    <string name="set_server_agent_ok">أجاب الوكيل الذكي ✔</string>
+    <string name="set_server_agent_ok">أجاب الوكيل الذكي</string>
     <string name="set_server_agent_empty">أجاب الخادم برد فارغ</string>
     <string name="set_server_agent_failed">فشل اختبار الوكيل — تحقق من العنوان والتوكن</string>
     <string name="set_delete_reauth">الجلسة قديمة، وسيُطلب تسجيل الدخول بجوجل مرة أخرى لتأكيد الحذف.</string>

@@ -7,7 +7,9 @@ import com.animeblack.core.common.result.runCatchingApp
 import com.animeblack.core.common.util.Ids
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
 import com.animeblack.core.data.mapper.toSession
 import com.animeblack.core.data.repository.SessionRepository
 import com.animeblack.core.datastore.SettingsDataSource
@@ -28,12 +30,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
-/**
- * Registers this device as a session in `sessions/{id}` (same schema as the web), keeps
- * `lastActive` fresh and signs the user out when the session is revoked from another device.
- */
 @Singleton
 class SessionManager @Inject constructor(
     private val auth: FirebaseAuth,
@@ -66,9 +63,8 @@ class SessionManager @Inject constructor(
             "lastActive" to now,
         ) + if (existing == null) mapOf("startTime" to now) else emptyMap()
         try {
-            firestore.collection(Collections.SESSIONS).document(sessionId).set(data, SetOptions.merge()).await()
+            firestore.collection(Collections.SESSIONS).document(sessionId).set(data, SetOptions.merge()).awaitWrite(600L)
         } catch (_: Exception) {
-            // Offline: the write stays queued in the Firestore cache.
         }
         settings.setSessionId(sessionId)
         _currentSessionId.value = sessionId
@@ -106,7 +102,7 @@ class SessionManager @Inject constructor(
         val sessionId = _currentSessionId.value ?: settings.sessionId()
         if (sessionId != null) {
             try {
-                firestore.collection(Collections.SESSIONS).document(sessionId).delete().await()
+                firestore.collection(Collections.SESSIONS).document(sessionId).delete().awaitWrite(600L)
             } catch (_: Exception) {
             }
         }
@@ -116,14 +112,14 @@ class SessionManager @Inject constructor(
 
     override fun observeSessions(): Flow<List<UserSession>> =
         currentSessionId.flatMapLatest {
-            val uid = auth.currentUser?.uid ?: return@flatMapLatest emptyFlow()
+            val uid = auth.activeUid() ?: return@flatMapLatest emptyFlow()
             firestore.collection(Collections.SESSIONS).whereEqualTo("userId", uid).asFlow()
                 .map { snap -> snap.documents.mapNotNull { d -> d.data?.toSession(d.id) }.sortedByDescending { it.lastActive } }
                 .catch { emit(emptyList()) }
         }
 
     override suspend fun revoke(sessionId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        firestore.collection(Collections.SESSIONS).document(sessionId).delete().await()
+        firestore.collection(Collections.SESSIONS).document(sessionId).delete().awaitWrite(800L)
         Unit
     }
 }

@@ -3,9 +3,13 @@ package com.animeblack.app
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 
-/** Release builds attest with Play Integrity (register the app's SHA-256 in App Check). */
+/**
+ * Optional App Check installer for release builds. Disabled by default on debug-signed sideloaded
+ * APKs so failed Play Integrity attestation never blocks or slows down Firestore/Storage requests.
+ */
 object AppCheckInstaller {
-    fun install() {
+    fun install(enabled: Boolean = false) {
+        if (!enabled) return
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
     }
 }

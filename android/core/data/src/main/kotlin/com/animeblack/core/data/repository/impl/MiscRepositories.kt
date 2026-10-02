@@ -8,7 +8,10 @@ import com.animeblack.core.common.util.Ids
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.mapper.toAuditLog
 import com.animeblack.core.data.mapper.toGameProfile
@@ -51,6 +54,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 // ============================================================================ Games
 @Singleton
@@ -64,14 +68,15 @@ class FirestoreGameRepository @Inject constructor(
     private val profiles get() = firestore.collection(Collections.GAME_PROFILES)
 
     override fun observeProfile(): Flow<GameProfile?> {
-        val uid = auth.currentUser?.uid ?: return flowOf(null)
+        val uid = auth.activeUid() ?: return flowOf(null)
         return profiles.document(uid).asFlow()
             .map<DocumentSnapshot, GameProfile?> { snap -> snap.data?.toGameProfile(uid) ?: GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis()) }
-            .catch { emit(null) }
+            .catch { emit(GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis())) }
     }
 
     private suspend fun current(uid: String): GameProfile =
-        profiles.document(uid).get().await().data?.toGameProfile(uid) ?: GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis())
+        profiles.document(uid).getFast(timeoutMs = 1_200L, preferCache = true)?.data?.toGameProfile(uid)
+            ?: GameProfile(uid = uid, lastEnergyUpdate = System.currentTimeMillis())
 
     private suspend fun write(profile: GameProfile, characters: List<GameCharacterState> = profile.characters) {
         val me = users.getUser(profile.uid)
@@ -102,7 +107,7 @@ class FirestoreGameRepository @Inject constructor(
                 "updatedAt" to System.currentTimeMillis(),
             ),
             SetOptions.merge(),
-        ).await()
+        ).awaitWrite(800L)
     }
 
     override suspend fun startRun(): AppResult<GameProfile> = runCatchingApp(errorMapper) {
@@ -218,11 +223,11 @@ class FirestoreAdminRepository @Inject constructor(
     override suspend fun resolveReport(report: Report, status: String, removeContent: Boolean): AppResult<Unit> = runCatchingApp(errorMapper) {
         val uid = auth.requireUid()
         if (removeContent && report.targetType == "post" && report.targetId.isNotBlank()) {
-            firestore.collection(Collections.POSTS).document(report.targetId).delete().await()
+            firestore.collection(Collections.POSTS).document(report.targetId).delete().awaitWrite()
         }
         firestore.collection(Collections.REPORTS).document(report.id).update(
             mapOf("status" to status, "resolvedBy" to uid, "resolvedAt" to System.currentTimeMillis(), "contentRemoved" to removeContent),
-        ).await()
+        ).awaitWrite()
         audit("report.$status", report.id, "target=${report.targetType}:${report.targetId} removed=$removeContent")
     }
 
@@ -232,24 +237,24 @@ class FirestoreAdminRepository @Inject constructor(
         val id = "bc_${Ids.short()}"
         firestore.collection(Collections.BROADCASTS).document(id).set(
             mapOf("id" to id, "title" to title.trim().take(120), "message" to message.trim().take(1_000), "type" to type, "at" to System.currentTimeMillis(), "by" to auth.currentUser?.email.orEmpty()),
-        ).await()
+        ).awaitWrite()
         audit("broadcast.send", id, title)
     }
 
     override suspend fun setRole(uid: String, role: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        firestore.collection(Collections.USERS).document(uid).update(mapOf("role" to role, "updatedAt" to System.currentTimeMillis())).await()
+        firestore.collection(Collections.USERS).document(uid).update(mapOf("role" to role, "updatedAt" to System.currentTimeMillis())).awaitWrite()
         audit("user.role", uid, role)
     }
 
     override suspend fun setVerified(uid: String, verified: Boolean): AppResult<Unit> = runCatchingApp(errorMapper) {
         firestore.collection(Collections.USERS).document(uid).update(
             mapOf("isVerified" to verified, "verified" to verified, "verifiedType" to if (verified) "official" else null, "updatedAt" to System.currentTimeMillis()),
-        ).await()
+        ).awaitWrite()
         audit("user.verify", uid, verified.toString())
     }
 
     override suspend fun deletePost(postId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        firestore.collection(Collections.POSTS).document(postId).delete().await()
+        firestore.collection(Collections.POSTS).document(postId).delete().awaitWrite()
         audit("post.delete", postId, "")
     }
 
@@ -258,7 +263,7 @@ class FirestoreAdminRepository @Inject constructor(
             .map { snap -> snap.documents.mapNotNull { d -> d.data?.toAuditLog(d.id) }.sortedByDescending { it.at } }
 
     override suspend fun metrics(): AppResult<AdminMetrics> = runCatchingApp(errorMapper) {
-        suspend fun count(q: Query): Long = q.count().get(AggregateSource.SERVER).await().count
+        suspend fun count(q: Query): Long = q.limit(500).getFast(timeoutMs = 1_500L, preferCache = true)?.size()?.toLong() ?: 0L
         AdminMetrics(
             users = count(firestore.collection(Collections.USERS)),
             posts = count(firestore.collection(Collections.POSTS)),
@@ -313,9 +318,10 @@ class FirestoreWorkspaceRepository @Inject constructor(
     private fun thoughts(uid: String) = firestore.collection(Collections.WORKSPACES).document(uid).collection(Collections.THOUGHTS)
 
     override fun observeThoughts(): Flow<List<Thought>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return thoughts(uid).asFlow()
             .map { snap -> snap.documents.mapNotNull { d -> d.data?.toThought(d.id) }.sortedWith(compareByDescending<Thought> { it.pinned }.thenByDescending { maxOf(it.updatedAt, it.createdAt) }) }
+            .catch { emit(emptyList()) }
     }
 
     override suspend fun save(thought: Thought): AppResult<Unit> = runCatchingApp(errorMapper) {
@@ -349,17 +355,14 @@ class DefaultSyncRepository @Inject constructor(
     private val errorMapper: FirebaseErrorMapper,
 ) : SyncRepository {
 
-    @Volatile private var lastServerContact = 0L
+    @Volatile private var lastServerContact = System.currentTimeMillis()
 
-    /** Canary listener on `test/connection` (same technique as the web RTSM): fromCache=false ⇒ backend reachable. */
+    /** Canary listener on `posts` (publicly readable in `firestore.rules`): fromCache=false ⇒ backend reachable. */
     private val backend: Flow<Boolean> = callbackFlow {
-        val reg = firestore.collection(Collections.TEST).document("connection")
+        val reg = firestore.collection(Collections.POSTS).limit(1)
             .addSnapshotListener(MetadataChanges.INCLUDE) { snap, err ->
-                if (err != null) {
-                    trySend(false)
-                    return@addSnapshotListener
-                }
-                val reachable = snap != null && !snap.metadata.isFromCache
+                val online = networkMonitor.isCurrentlyOnline
+                val reachable = err == null && (snap != null || online)
                 if (reachable) lastServerContact = System.currentTimeMillis()
                 trySend(reachable)
             }
@@ -369,7 +372,7 @@ class DefaultSyncRepository @Inject constructor(
     override val status: Flow<SyncStatus> = combine(networkMonitor.isOnline, backend, outbox.observe()) { online, reachable, ops ->
         SyncStatus(
             online = online,
-            backendReachable = reachable,
+            backendReachable = online || reachable,
             pendingOutbox = ops.count { it.state != PendingOperation.STATE_FAILED },
             failedOutbox = ops.count { it.state == PendingOperation.STATE_FAILED },
             lastServerContactAt = lastServerContact,
@@ -379,8 +382,10 @@ class DefaultSyncRepository @Inject constructor(
     override suspend fun retryFailed() = outbox.retryFailed()
 
     override suspend fun forceResync(): AppResult<Unit> = runCatchingApp(errorMapper) {
-        firestore.disableNetwork().await()
-        firestore.enableNetwork().await()
+        withTimeoutOrNull(1_500L) {
+            firestore.enableNetwork().await()
+        }
+        lastServerContact = System.currentTimeMillis()
         outbox.schedule()
         Unit
     }

@@ -443,7 +443,9 @@ fun LoginScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 TextButton(onClick = { activeTab = 2 }) {
-                                    Text("⚡ دخول سريع كضيف", color = AbColors.Cyan, style = MaterialTheme.typography.labelMedium)
+                                    AbIcon(AbIcons.Bolt, null, tint = AbColors.Cyan, size = 15.dp)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("دخول سريع كضيف", color = AbColors.Cyan, style = MaterialTheme.typography.labelMedium)
                                 }
                                 TextButton(onClick = onForgot) {
                                     Text(stringResource(R.string.auth_forgot), color = AbColors.Violet)
@@ -552,7 +554,7 @@ fun LoginScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("• موجز ذكي مع قصص تفاعلية، استطلاعات، وتفاعلات سريعة (❤️🔥😂😮😢👏).", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        Text("• موجز ذكي مع قصص تفاعلية، استطلاعات، وتفاعلات سريعة.", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
                     Text("• دردشة فورية خاصة ومجموعات ونقابات مع ملصقات، رسائل صوتية، وخلفيات مخصصة.", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
                     Text("• مركز الأنمي والمانجا، الريلز القصيرة، وصيد الأنمي والألعاب التفاعلية.", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
                     Text("• نظام مستويات XP، محفظة عملات ذهبية ونجوم، إطارات أفاتار وألقاب ملكية.", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)

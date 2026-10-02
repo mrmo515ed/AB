@@ -28,19 +28,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,11 +74,14 @@ import com.animeblack.core.common.result.AppResult
 import com.animeblack.core.data.repository.AnimeRepository
 import com.animeblack.core.designsystem.component.AbIcon
 import com.animeblack.core.designsystem.component.AbIconButton
+import com.animeblack.core.designsystem.component.AbTextField
 import com.animeblack.core.designsystem.component.AbTopBar
 import com.animeblack.core.designsystem.component.EmptyState
 import com.animeblack.core.designsystem.component.ErrorState
 import com.animeblack.core.designsystem.component.GlassButton
 import com.animeblack.core.designsystem.component.GlassCard
+import com.animeblack.core.designsystem.component.GradientButton
+import com.animeblack.core.designsystem.component.IconTile
 import com.animeblack.core.designsystem.component.LoadingState
 import com.animeblack.core.designsystem.component.Pill
 import com.animeblack.core.designsystem.component.SearchField
@@ -82,8 +92,10 @@ import com.animeblack.core.model.AgentSource
 import com.animeblack.core.model.AnimeItem
 import com.animeblack.core.navigation.AnimeDetailRoute
 import com.animeblack.core.navigation.AnimeHubRoute
+import com.animeblack.core.navigation.ReelsRoute
 import com.animeblack.core.navigation.SearchAgentRoute
 import com.animeblack.core.ui.LinkifiedText
+import com.animeblack.core.ui.copyToClipboard
 import com.animeblack.core.ui.messageRes
 import com.animeblack.core.ui.openExternalUrl
 import com.animeblack.core.ui.shareText
@@ -105,7 +117,7 @@ import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// ============================================================================ Hub
+// ============================================================================ Hub (7-Tab Web PAGES.animeWiki Parity)
 
 data class AnimeHubUiState(
     val loading: Boolean = true,
@@ -151,7 +163,6 @@ class AnimeHubViewModel @Inject constructor(private val repository: AnimeReposit
             it.copy(
                 loading = false,
                 error = trending is AppResult.Failure && seasonal is AppResult.Failure,
-                // Jikan can return the same title twice; lazy-list keys must be unique.
                 trending = (trending as? AppResult.Success)?.data.orEmpty().distinctBy { a -> a.source + a.id },
                 seasonal = (seasonal as? AppResult.Success)?.data.orEmpty().distinctBy { a -> a.source + a.id },
             )
@@ -159,44 +170,302 @@ class AnimeHubViewModel @Inject constructor(private val repository: AnimeReposit
     }
 }
 
+private data class WikiCharacter(val id: String, val name: String, val anime: String, val role: String, val power: String)
+private data class WikiQuote(val id: String, val text: String, val character: String, val anime: String)
+private data class WikiExplanation(val id: String, val title: String, val anime: String, val category: String, val summary: String)
+private data class WikiNews(val id: String, val title: String, val studio: String, val timeAgo: String, val summary: String)
+
 @Composable
 fun AnimeHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: AnimeHubViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var activeTab by rememberSaveable { mutableIntStateOf(0) }
+    var showAddQuoteDialog by remember { mutableStateOf(false) }
+    var showAddExplanationDialog by remember { mutableStateOf(false) }
+
+    val quotesList = remember {
+        mutableStateListOf(
+            WikiQuote("q1", "إذا لم تقاتل فلن تفوز، انهض وقاتل!", "إيرين ييغر", "Attack on Titan"),
+            WikiQuote("q2", "أنا لن أتراجع عن كلمتي أبداً، هذه هي طريقتي في النينجا!", "ناروتو أوزوماكي", "Naruto Shippuden"),
+            WikiQuote("q3", "طوال السماوات والأرض، أنا وحدي المبجَّل.", "ساتورو غوجو", "Jujutsu Kaisen"),
+            WikiQuote("q4", "درس بلا ألم لا معنى له؛ لا يمكنك الحصول على شيء دون التضحية بشيء مقابل.", "إدوارد إلريك", "Fullmetal Alchemist"),
+            WikiQuote("q5", "الوحدة أشد إيلاماً من الجراح.", "مونكي دي لوفي", "One Piece"),
+        )
+    }
+
+    val explanationsList = remember {
+        mutableStateListOf(
+            WikiExplanation("ex1", "شرح نظام النين (Nen) وأقسامه الستة بالتفصيل", "Hunter x Hunter", "أنظمة القوة", "يتكون النين من أربعة مبادئ أساسية (تين، زيتسو، رين، هاتسو) وست فئات: التعزيز، التحويل، الإشعاع، التلاعب، التجسيد، والتخصص."),
+            WikiExplanation("ex2", "كيف تعمل تقنية اللانهاية وتوسيع المجال لساتورو غوجو؟", "Jujutsu Kaisen", "تحليل قدرات", "تعتمد اللانهاية على متسلسلة تقارب رياضية تبطئ أي جسم يقترب من غوجو، بينما يغمر الفراغ اللانهائي دماغ الخصم بمعلومات لا نهائية."),
+            WikiExplanation("ex3", "التسلسل الزمني الكامل لقرن الفراغ وحكومة العالم", "One Piece", "نظريات ولور", "تحليل شامل للبونيغليف، الممالك القديمة، وأسرار الجوي بوي وعلاقته بفاكهة نيكا."),
+        )
+    }
+
+    val charactersList = remember {
+        listOf(
+            WikiCharacter("ch1", "ساتورو غوجو", "Jujutsu Kaisen", "بطل رئيسي", "الفراغ اللانهائي والأعين الست"),
+            WikiCharacter("ch2", "مونكي دي لوفي", "One Piece", "قائد طاقم قبعة القش", "المحرك الخامس • نيكا"),
+            WikiCharacter("ch3", "ليفاي أكرمان", "Attack on Titan", "قائد فيلق الاستطلاع", "دماء الأكرمان القتالية"),
+            WikiCharacter("ch4", "رورونوا زورو", "One Piece", "سياف الطاقم", "أسلوب الثلاثة سيوف • الهاكي الملكي"),
+            WikiCharacter("ch5", "إيتاتشي أوتشيها", "Naruto Shippuden", "نينجا أسطوري", "المانغيكيو شارينغان • تسوكويومي"),
+        )
+    }
+
+    val newsList = remember {
+        listOf(
+            WikiNews("n1", "الإعلان الرسمي عن جدول عروض موسم الأنمي القادم", "MAPPA & Ufotable", "منذ ساعتين", "قائمة شاملة بأقوى الأنميات العائدة هذا الموسم مع مواعيد البث الأسبوعية."),
+            WikiNews("n2", "أرقام قياسية جديدة لمبيعات المانجا العالمية هذا الشهر", "Shueisha", "منذ 5 ساعات", "تصدرت مانجا ون بيس وجوجوتسو كايسن قوائم المبيعات العالمية بأرقام غير مسبوقة."),
+            WikiNews("n3", "الكشف عن عرض تشويقي جديد لأرك القلعة اللانهائية", "Ufotable", "منذ يوم", "استوديو Ufotable يستعرض جودة تحريك سينمائية فائقة في العرض التشويقي الجديد."),
+        )
+    }
+
+    val tabs = listOf(
+        "أنمي" to AbIcons.LiveTv,
+        "مانجا" to AbIcons.AutoStories,
+        "شخصيات" to AbIcons.Person,
+        "اقتباسات" to AbIcons.Forum,
+        "شروحات" to AbIcons.StickyNote2,
+        "أخبار" to AbIcons.Notifications,
+        "فيديو" to AbIcons.SmartDisplay,
+    )
+
     Scaffold(
         topBar = {
             AbTopBar(
                 title = stringResource(R.string.anime_title),
                 onBack = onBack,
-                actions = { AbIconButton(AbIcons.AutoAwesome, stringResource(R.string.agent_title), onClick = { navigate(SearchAgentRoute) }, tint = AbColors.Cyan) },
+                actions = {
+                    AbIconButton(AbIcons.AutoAwesome, stringResource(R.string.agent_title), onClick = { navigate(SearchAgentRoute) }, tint = AbColors.Cyan)
+                },
             )
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
-            item {
-                SearchField(query = query, onQueryChange = { viewModel.query.value = it }, placeholder = stringResource(R.string.anime_search), modifier = Modifier.fillMaxWidth().padding(16.dp))
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = state.mediaType == "ANIME", onClick = { viewModel.mediaType.value = "ANIME" }, label = { Text(stringResource(R.string.anime_title)) })
-                    FilterChip(selected = state.mediaType == "MANGA", onClick = { viewModel.mediaType.value = "MANGA" }, label = { Text(stringResource(R.string.anime_manga)) })
+            item(key = "search_and_tabs") {
+                SearchField(
+                    query = query,
+                    onQueryChange = { viewModel.query.value = it },
+                    placeholder = stringResource(R.string.anime_search),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+                PrimaryScrollableTabRow(selectedTabIndex = activeTab, containerColor = Color.Transparent, edgePadding = 12.dp) {
+                    tabs.forEachIndexed { idx, (label, icon) ->
+                        Tab(
+                            selected = activeTab == idx,
+                            onClick = {
+                                activeTab = idx
+                                if (idx == 0) viewModel.mediaType.value = "ANIME"
+                                if (idx == 1) viewModel.mediaType.value = "MANGA"
+                            },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AbIcon(icon, null, tint = if (activeTab == idx) AbColors.Cyan else AbColors.TextMuted, size = 16.dp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(label)
+                                }
+                            },
+                        )
+                    }
                 }
             }
-            val results = state.results
-            when {
-                state.searching -> item { LoadingState(Modifier.padding(32.dp)) }
-                results != null -> {
-                    if (results.isEmpty()) item { EmptyState(title = stringResource(R.string.anime_no_results), icon = AbIcons.Search) }
-                    items(results, key = { it.source + it.id }) { a -> AnimeRow(a) { navigate(AnimeDetailRoute(a.id, a.mediaType)) } }
+
+            when (activeTab) {
+                0, 1 -> {
+                    val results = state.results
+                    when {
+                        state.searching -> item { LoadingState(Modifier.padding(32.dp)) }
+                        results != null -> {
+                            if (results.isEmpty()) item { EmptyState(title = stringResource(R.string.anime_no_results), icon = AbIcons.Search) }
+                            items(results, key = { it.source + it.id }) { a -> AnimeRow(a) { navigate(AnimeDetailRoute(a.id, a.mediaType)) } }
+                        }
+                        state.loading -> item { LoadingState(Modifier.padding(32.dp)) }
+                        state.error -> item { ErrorState(stringResource(R.string.anime_error), onRetry = { viewModel.load() }) }
+                        else -> {
+                            item { SectionHeader(stringResource(R.string.anime_trending), modifier = Modifier.padding(horizontal = 16.dp)) }
+                            item { Carousel(state.trending) { navigate(AnimeDetailRoute(it.id, it.mediaType)) } }
+                            item { SectionHeader(stringResource(R.string.anime_seasonal), modifier = Modifier.padding(horizontal = 16.dp)) }
+                            items(state.seasonal, key = { "s_" + it.source + it.id }) { a -> AnimeRow(a) { navigate(AnimeDetailRoute(a.id, a.mediaType)) } }
+                        }
+                    }
                 }
-                state.loading -> item { LoadingState(Modifier.padding(32.dp)) }
-                state.error -> item { ErrorState(stringResource(R.string.anime_error), onRetry = { viewModel.load() }) }
+
+                // 2: شخصيات
+                2 -> {
+                    item { SectionHeader("أشهر شخصيات الأنمي والمانجا", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                    items(charactersList, key = { it.id }) { ch ->
+                        GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(icon = AbIcons.Person, brush = AbColors.CyanVioletGradient)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(ch.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                        Spacer(Modifier.width(8.dp))
+                                        Pill(ch.anime, color = AbColors.Purple)
+                                    }
+                                    Text(ch.role, style = MaterialTheme.typography.labelSmall, color = AbColors.Cyan)
+                                    Text(ch.power, style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3: اقتباسات
+                3 -> {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("اقتباسات أنمي خالدة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                            GradientButton("إضافة اقتباس", icon = AbIcons.Add, onClick = { showAddQuoteDialog = true })
+                        }
+                    }
+                    items(quotesList, key = { it.id }) { q ->
+                        GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("«${q.text}»", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Pill(q.character, color = AbColors.Cyan)
+                                    Spacer(Modifier.width(6.dp))
+                                    Pill(q.anime, color = AbColors.DeepPurple)
+                                    Spacer(Modifier.weight(1f))
+                                    AbIconButton(AbIcons.ContentCopy, "نسخ", onClick = { copyToClipboard(context, "«${q.text}» — ${q.character} (${q.anime})") }, tint = AbColors.TextMuted)
+                                    AbIconButton(AbIcons.Share, "مشاركة", onClick = { context.shareText("«${q.text}» — ${q.character} (${q.anime})") }, tint = AbColors.Cyan)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4: شروحات
+                4 -> {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("موسوعة الشروحات والنظريات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                            GradientButton("كتابة شرح", icon = AbIcons.Edit, onClick = { showAddExplanationDialog = true })
+                        }
+                    }
+                    items(explanationsList, key = { it.id }) { ex ->
+                        GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Pill(ex.category, color = AbColors.Cyan)
+                                    Spacer(Modifier.width(6.dp))
+                                    Pill(ex.anime, color = AbColors.Purple)
+                                }
+                                Text(ex.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                Text(ex.summary, style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                // 5: أخبار
+                5 -> {
+                    item { SectionHeader("آخر أخبار الأنمي والاستوديوهات", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                    items(newsList, key = { it.id }) { n ->
+                        GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Pill(n.studio, color = AbColors.Gold)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(n.timeAgo, style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                Text(n.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                Text(n.summary, style = MaterialTheme.typography.bodySmall, color = AbColors.TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                // 6: فيديو
                 else -> {
-                    item { SectionHeader(stringResource(R.string.anime_trending), modifier = Modifier.padding(horizontal = 16.dp)) }
-                    item { Carousel(state.trending) { navigate(AnimeDetailRoute(it.id, it.mediaType)) } }
-                    item { SectionHeader(stringResource(R.string.anime_seasonal), modifier = Modifier.padding(horizontal = 16.dp)) }
-                    items(state.seasonal, key = { "s_" + it.source + it.id }) { a -> AnimeRow(a) { navigate(AnimeDetailRoute(a.id, a.mediaType)) } }
+                    item {
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            borderColor = AbColors.Violet.copy(alpha = 0.4f),
+                            onClick = { navigate(ReelsRoute) },
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(icon = AbIcons.SmartDisplay, brush = AbColors.CyanVioletGradient)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("مقاطع وريلز الأنمي القصيرة", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                    Text("شاهد أحدث مقاطع AMV، العروض التشويقية، واللقطات الحماسية في قسم الريلز", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                Pill("فتح الريلز", color = AbColors.Cyan)
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+
+    if (showAddQuoteDialog) {
+        var qText by remember { mutableStateOf("") }
+        var qChar by remember { mutableStateOf("") }
+        var qAnime by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddQuoteDialog = false },
+            containerColor = AbColors.Charcoal2,
+            title = { Text("إضافة اقتباس أنمي", fontWeight = FontWeight.Black) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AbTextField(qText, { qText = it }, label = "نص الاقتباس", singleLine = false, minLines = 3)
+                    AbTextField(qChar, { qChar = it }, label = "اسم الشخصية")
+                    AbTextField(qAnime, { qAnime = it }, label = "اسم الأنمي")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (qText.isNotBlank() && qChar.isNotBlank()) {
+                        quotesList.add(0, WikiQuote("q_" + System.currentTimeMillis(), qText.trim(), qChar.trim(), qAnime.trim().ifBlank { "أنمي" }))
+                        showAddQuoteDialog = false
+                    }
+                }) { Text("نشر", color = AbColors.Cyan, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddQuoteDialog = false }) { Text("إلغاء", color = AbColors.TextMuted) }
+            },
+        )
+    }
+
+    if (showAddExplanationDialog) {
+        var exTitle by remember { mutableStateOf("") }
+        var exAnime by remember { mutableStateOf("") }
+        var exBody by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddExplanationDialog = false },
+            containerColor = AbColors.Charcoal2,
+            title = { Text("كتابة شرح أو نظرية أنمي", fontWeight = FontWeight.Black) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AbTextField(exTitle, { exTitle = it }, label = "عنوان الشرح")
+                    AbTextField(exAnime, { exAnime = it }, label = "اسم الأنمي")
+                    AbTextField(exBody, { exBody = it }, label = "تفاصيل الشرح", singleLine = false, minLines = 4)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (exTitle.isNotBlank() && exBody.isNotBlank()) {
+                        explanationsList.add(0, WikiExplanation("ex_" + System.currentTimeMillis(), exTitle.trim(), exAnime.trim().ifBlank { "أنمي" }, "تحليل", exBody.trim()))
+                        showAddExplanationDialog = false
+                    }
+                }) { Text("نشر", color = AbColors.Cyan, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddExplanationDialog = false }) { Text("إلغاء", color = AbColors.TextMuted) }
+            },
+        )
     }
 }
 
@@ -231,7 +500,7 @@ private fun AnimeRow(a: AnimeItem, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(a.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(a.format.ifBlank { null }, a.year?.toString(), a.episodes?.let { "$it EP" }, a.score?.let { String.format(Locale.US, "★ %.1f", it) }).joinToString(" · "),
+                listOfNotNull(a.format.ifBlank { null }, a.year?.toString(), a.episodes?.let { "$it EP" }, a.score?.let { String.format(Locale.US, "%.1f", it) }).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = AbColors.TextMuted,
             )
@@ -403,7 +672,6 @@ class SearchAgentViewModel @Inject constructor(private val repository: AnimeRepo
     val messages: SharedFlow<Int> = _messages.asSharedFlow()
 
     init {
-        // The server URL can be changed from Settings at any time, so the flag stays live.
         viewModelScope.launch {
             repository.agentConfigured.collect { configured -> _state.update { it.copy(configured = configured) } }
         }

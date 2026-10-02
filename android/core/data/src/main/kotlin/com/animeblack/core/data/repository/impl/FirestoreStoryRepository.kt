@@ -9,6 +9,8 @@ import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.firebase.str
 import com.animeblack.core.data.firebase.toStringKeyed
@@ -77,14 +79,10 @@ class FirestoreStoryRepository @Inject constructor(
         if (draft.text.isBlank() && draft.media == null) throw AppErrorException(AppError.Validation("story", "empty"))
         val me = users.getUser(uid)
         val now = System.currentTimeMillis()
-        val existing = try {
-            stories.whereEqualTo("userId", uid).get().await().documents
-                .mapNotNull { d -> d.data?.toStory(d.id) }
-                .filter { it.isActive(now) }
-                .maxByOrNull { it.latestItemAt }
-        } catch (_: Exception) {
-            null
-        }
+        val existing = stories.whereEqualTo("userId", uid).getFast(timeoutMs = 1_200L, preferCache = true)?.documents
+            ?.mapNotNull { d -> d.data?.toStory(d.id) }
+            ?.filter { it.isActive(now) }
+            ?.maxByOrNull { it.latestItemAt }
         val file = draft.media?.let { media ->
             val prepared = preparer.prepare(media)
             val ready = (prepared as? AppResult.Success)?.data ?: throw AppErrorException(prepared.errorOrNull() ?: AppError.Unknown())
@@ -92,9 +90,42 @@ class FirestoreStoryRepository @Inject constructor(
             val ext = Uri.parse(ready.uri).lastPathSegment?.substringAfterLast('.', "jpg") ?: "jpg"
             UploadFile(ready.uri, ready.mimeType, ready.type, ready.name, ready.sizeBytes, "stories/$uid/${now}_${Ids.short().take(5)}.$ext", ready.durationMs)
         }
+        val storyId = existing?.id ?: Ids.story()
+        val itemId = Ids.storyItem()
+        if (file == null) {
+            val item = mapOf(
+                "id" to itemId,
+                "type" to "text",
+                "text" to draft.text.trim().take(500),
+                "c1" to draft.color1,
+                "c2" to draft.color2,
+                "textColor" to draft.textColor,
+                "textSize" to draft.textSize,
+                "createdAt" to now,
+                "duration" to 5_000,
+            )
+            val doc = mutableMapOf<String, Any?>(
+                "id" to storyId,
+                "userId" to uid,
+                "userName" to me?.displayName.orEmpty(),
+                "userAvatar" to me?.avatar.orEmpty(),
+                "closeFriends" to draft.closeFriends,
+                "hiddenFrom" to emptyList<String>(),
+                "items" to FieldValue.arrayUnion(item),
+                "updatedAt" to now,
+                "platform" to "android",
+            )
+            if (existing == null) {
+                doc["createdAt"] = now
+                doc["views"] = emptyList<Any>()
+                doc["reactions"] = emptyList<Any>()
+            }
+            stories.document(storyId).set(doc, com.google.firebase.firestore.SetOptions.merge()).awaitWrite(800L)
+            return@runCatchingApp
+        }
         val payload = StoryPublishPayload(
-            storyId = existing?.id ?: Ids.story(),
-            itemId = Ids.storyItem(),
+            storyId = storyId,
+            itemId = itemId,
             userName = me?.displayName.orEmpty(),
             userAvatar = me?.avatar.orEmpty(),
             text = draft.text.trim().take(500),
@@ -146,7 +177,7 @@ class FirestoreStoryRepository @Inject constructor(
     }
 
     override suspend fun deleteItem(story: Story, itemId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
-        val snap = stories.document(story.id).get().await()
+        val snap = stories.document(story.id).getFast(timeoutMs = 1_500L, preferCache = true) ?: return@runCatchingApp
         val items = snap.get("items") as? List<*> ?: return@runCatchingApp
         val raw = items.firstOrNull { (it as? Map<*, *>)?.toStringKeyed()?.str("id") == itemId } ?: return@runCatchingApp
         if (items.size <= 1) {

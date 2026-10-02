@@ -2,6 +2,7 @@ package com.animeblack.feature.games
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,17 +23,21 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -72,9 +77,12 @@ import com.animeblack.core.designsystem.component.Avatar
 import com.animeblack.core.designsystem.component.EmptyState
 import com.animeblack.core.designsystem.component.GlassButton
 import com.animeblack.core.designsystem.component.GlassCard
+import com.animeblack.core.designsystem.component.GlowChip
 import com.animeblack.core.designsystem.component.GradientButton
+import com.animeblack.core.designsystem.component.IconTile
 import com.animeblack.core.designsystem.component.LoadingState
 import com.animeblack.core.designsystem.component.Pill
+import com.animeblack.core.designsystem.component.SectionHeader
 import com.animeblack.core.designsystem.icon.AbIcons
 import com.animeblack.core.designsystem.theme.AbColors
 import com.animeblack.core.model.GameProfile
@@ -101,8 +109,6 @@ class GamesViewModel @Inject constructor(private val repository: GameRepository)
     val profile: StateFlow<GameProfile?> = repository.observeProfile().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val leaderboard: StateFlow<List<LeaderboardEntry>?> = repository.observeLeaderboard().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 3)
-
-    /** Either a string resource id (as text "res:<id>") or a formatted message. */
     val messages: SharedFlow<String> = _messages.asSharedFlow()
     private val _started = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val started: SharedFlow<Unit> = _started.asSharedFlow()
@@ -167,15 +173,21 @@ private fun rememberSnackbar(viewModel: GamesViewModel): SnackbarHostState {
 
 private fun GameCharacter.displayName(rtl: Boolean) = if (rtl) nameAr else nameEn
 
-// ============================================================================ Hub
+// ============================================================================ Hub (5-Tab Web PAGES.gamesHome Parity)
 
 @Composable
 fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: GamesViewModel = hiltViewModel()) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val board by viewModel.leaderboard.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = rememberSnackbar(viewModel)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    var activeTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedStage by rememberSaveable { mutableIntStateOf(0) }
+    var quizIndex by rememberSaveable { mutableIntStateOf(0) }
+    var quizFeedback by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
@@ -184,6 +196,30 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
     }
     LaunchedEffect(Unit) { viewModel.started.collect { navigate(GamePlayRoute) } }
     LaunchedEffect(Unit) { viewModel.claimed.collect { snackbar.showSnackbar(context.getString(R.string.games_claimed, it.toInt())) } }
+
+    val tabs = listOf(
+        "المعركة" to AbIcons.Swords,
+        "الأبطال" to AbIcons.Person,
+        "المهام" to AbIcons.Bolt,
+        "المتجر والصناديق" to AbIcons.CardGiftcard,
+        "المتصدرون" to AbIcons.Leaderboard,
+    )
+
+    val stages = listOf(
+        Triple(0, "غابة الظلال المحرمة", "المستوى الموصى: Lv.1+ • مكافأة: +100 ذهب"),
+        Triple(1, "قلعة الشياطين اللانهائية", "المستوى الموصى: Lv.3+ • مكافأة: +250 ذهب"),
+        Triple(2, "هاوية العمالقة المتوهجة", "المستوى الموصى: Lv.5+ • مكافأة: +500 ذهب"),
+        Triple(3, "عرش الشوغون الأسطوري", "المستوى الموصى: Lv.10+ • مكافأة: +1000 ذهب وجواهر"),
+    )
+
+    val quizQuestions = remember {
+        listOf(
+            Triple("من هو مؤلف مانجا هجوم العمالقة (Attack on Titan)؟", listOf("هاجيمي إيساياما", "إيتشيرو أودا", "ماساشي كيشيموتو", "تيتي كوبو"), 0),
+            Triple("ما هو اسم تقنية توسيع المجال الخاصة بساتورو غوجو؟", listOf("الضريح الخبيث", "الفراغ اللانهائي", "حديقة الظلال", "التابوت الحديدي"), 1),
+            Triple("ما اسم السيف الذي ورثه زورو من صديقته كوينا؟", listOf("إنما", "شوسوي", "وادو إيتشيمونجي", "سانداي كيتيتسو"), 2),
+        )
+    }
+
     Scaffold(topBar = { AbTopBar(title = stringResource(R.string.games_title), onBack = onBack) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         val p = profile
         if (p == null) {
@@ -192,11 +228,16 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
         }
         val energy = p.currentEnergy(now)
         val character = characterById(p.selectedCharacter)
+
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item {
+            // Hero Hunter Card
+            item(key = "hero_card") {
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF1E1B4B), Color(character.color)))).padding(20.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF1E1B4B), Color(character.color))))
+                        .padding(20.dp),
                 ) {
                     Text(stringResource(R.string.games_level, p.level), color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(character.displayName(rtl), color = Color.White.copy(alpha = 0.85f))
@@ -215,42 +256,217 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
                     }
                 }
             }
-            item {
-                GradientButton(
-                    stringResource(R.string.games_play, GameProfile.RUN_ENERGY_COST),
-                    onClick = { viewModel.start() },
-                    enabled = energy >= GameProfile.RUN_ENERGY_COST,
-                    icon = AbIcons.PlayArrowFilled,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (energy < GameProfile.RUN_ENERGY_COST) {
-                    Text(stringResource(R.string.games_no_energy), color = AbColors.Orange, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp))
-                }
-            }
-            item {
-                GlassCard(Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        HubStat(compactCount(p.highScore), stringResource(R.string.games_high_score))
-                        HubStat(compactCount(p.bestDistance), stringResource(R.string.games_best_distance))
-                        HubStat(compactCount(p.totalKills), stringResource(R.string.games_kills))
-                        HubStat(p.gamesPlayed.toString(), stringResource(R.string.games_matches))
+
+            // 5-Tab Bar
+            item(key = "games_tabs") {
+                PrimaryScrollableTabRow(selectedTabIndex = activeTab, containerColor = Color.Transparent, edgePadding = 0.dp) {
+                    tabs.forEachIndexed { idx, (label, icon) ->
+                        Tab(
+                            selected = activeTab == idx,
+                            onClick = { activeTab = idx },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AbIcon(icon, null, tint = if (activeTab == idx) AbColors.Cyan else AbColors.TextMuted, size = 16.dp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(label)
+                                }
+                            },
+                        )
                     }
                 }
             }
-            item {
-                GlassCard(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AbIcon(AbIcons.Redeem, null, tint = AbColors.Gold, size = 28.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.games_daily), modifier = Modifier.weight(1f))
-                        GradientButton(stringResource(R.string.games_claim), onClick = { viewModel.claimDaily() }, enabled = now - p.lastDailyAt >= 20 * 60 * 60 * 1000L)
+
+            when (activeTab) {
+                // 0: المعركة
+                0 -> {
+                    item {
+                        GradientButton(
+                            stringResource(R.string.games_play, GameProfile.RUN_ENERGY_COST),
+                            onClick = { viewModel.start() },
+                            enabled = energy >= GameProfile.RUN_ENERGY_COST,
+                            icon = AbIcons.PlayArrowFilled,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (energy < GameProfile.RUN_ENERGY_COST) {
+                            Text(stringResource(R.string.games_no_energy), color = AbColors.Orange, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp))
+                        }
+                    }
+                    item {
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                HubStat(compactCount(p.highScore), stringResource(R.string.games_high_score))
+                                HubStat(compactCount(p.bestDistance), stringResource(R.string.games_best_distance))
+                                HubStat(compactCount(p.totalKills), stringResource(R.string.games_kills))
+                                HubStat(p.gamesPlayed.toString(), stringResource(R.string.games_matches))
+                            }
+                        }
+                    }
+                    item {
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AbIcon(AbIcons.Redeem, null, tint = AbColors.Gold, size = 28.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text(stringResource(R.string.games_daily), modifier = Modifier.weight(1f))
+                                GradientButton(stringResource(R.string.games_claim), onClick = { viewModel.claimDaily() }, enabled = now - p.lastDailyAt >= 20 * 60 * 60 * 1000L)
+                            }
+                        }
+                    }
+                    item { SectionHeader("اختيار ساحة القتال (Stages)") }
+                    itemsIndexed(stages, key = { _, s -> s.first }) { _, (idx, stName, stDesc) ->
+                        GlassCard(
+                            borderColor = if (selectedStage == idx) AbColors.Cyan else AbColors.GlassBorder,
+                            onClick = { selectedStage = idx },
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(icon = AbIcons.Swords, brush = if (selectedStage == idx) AbColors.CyanVioletGradient else AbColors.GoldGradient)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(stName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                    Text(stDesc, style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                Pill(if (selectedStage == idx) "محددة" else "اختيار", color = if (selectedStage == idx) AbColors.Emerald else AbColors.Purple)
+                            }
+                        }
+                    }
+                    // Quick Anime Quiz Mini-Game
+                    item { SectionHeader("تحدي الأوتاكو السريع (Anime Quiz)") }
+                    item {
+                        val (qText, options, correctIdx) = quizQuestions[quizIndex % quizQuestions.size]
+                        GlassCard(borderColor = AbColors.Gold.copy(alpha = 0.35f)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(qText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                options.forEachIndexed { optIdx, optLabel ->
+                                    GlowChip(
+                                        text = optLabel,
+                                        accentColor = AbColors.Cyan,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = {
+                                            if (optIdx == correctIdx) {
+                                                quizFeedback = "إجابة صحيحة! أحسنت يا بطل الأوتاكو"
+                                                quizIndex = (quizIndex + 1) % quizQuestions.size
+                                            } else {
+                                                quizFeedback = "إجابة غير صحيحة، حاول مرة أخرى!"
+                                            }
+                                        },
+                                    )
+                                }
+                                quizFeedback?.let { fb ->
+                                    Text(fb, style = MaterialTheme.typography.labelMedium, color = AbColors.BrightGold, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassButton(stringResource(R.string.games_characters), onClick = { navigate(GameCharactersRoute) }, icon = AbIcons.Swords, modifier = Modifier.weight(1f))
-                    GlassButton(stringResource(R.string.games_leaderboard), onClick = { navigate(GameLeaderboardRoute) }, icon = AbIcons.Leaderboard, modifier = Modifier.weight(1f))
+
+                // 1: الأبطال
+                1 -> {
+                    itemsIndexed(GAME_CHARACTERS, key = { _, c -> c.id }) { _, c ->
+                        val state = p.characters.firstOrNull { it.id == c.id }
+                        val unlocked = c.id == "c_ren" || state?.unlocked == true
+                        val level = state?.level ?: 1
+                        val equipped = p.selectedCharacter == c.id
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(Color(c.color)), contentAlignment = Alignment.Center) {
+                                    AbIcon(if (unlocked) AbIcons.Swords else AbIcons.Lock, null, tint = Color.White)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(c.displayName(rtl), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text(c.rarity + " · " + stringResource(R.string.games_level_short, level), style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                if (equipped) Pill(stringResource(R.string.games_equipped), color = AbColors.Emerald)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                when {
+                                    !unlocked && c.unlockGems > 0 -> GradientButton(stringResource(R.string.games_unlock_gems, c.unlockGems.toInt()), onClick = { viewModel.unlock(c) }, enabled = p.gems >= c.unlockGems, modifier = Modifier.weight(1f))
+                                    !unlocked -> GradientButton(stringResource(R.string.games_unlock_coins, c.unlockCoins.toInt()), onClick = { viewModel.unlock(c) }, enabled = p.gold >= c.unlockCoins, modifier = Modifier.weight(1f))
+                                    else -> {
+                                        if (!equipped) GlassButton(stringResource(R.string.games_equip), onClick = { viewModel.select(c) }, modifier = Modifier.weight(1f))
+                                        GradientButton(stringResource(R.string.games_upgrade, upgradeCost(level).toInt()), onClick = { viewModel.upgrade(c, level) }, enabled = p.gold >= upgradeCost(level), modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2: المهام
+                2 -> {
+                    item { SectionHeader("مهام الصياد اليومية والأسبوعية") }
+                    val hunterQuests = listOf(
+                        Triple("خض جولة واحدة في ساحة القتال", (p.gamesPlayed.coerceAtMost(1)).toFloat() / 1f, "+150 ذهب"),
+                        Triple("اهزم 10 وحوش في الساحة", (p.totalKills.coerceAtMost(10)).toFloat() / 10f, "+300 ذهب"),
+                        Triple("تجاوز مسافة 500 متر", (p.bestDistance.coerceAtMost(500)).toFloat() / 500f, "+5 جواهر"),
+                        Triple("احصل على 1,000 نقطة في جولة", (p.highScore.coerceAtMost(1000)).toFloat() / 1000f, "+500 ذهب"),
+                    )
+                    itemsIndexed(hunterQuests, key = { idx, _ -> "hq_$idx" }) { _, (qTitle, progress, reward) ->
+                        GlassCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AbIcon(if (progress >= 1f) AbIcons.CheckCircle else AbIcons.Bolt, null, tint = if (progress >= 1f) AbColors.Emerald else AbColors.Gold)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(qTitle, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    Pill(reward, color = if (progress >= 1f) AbColors.Emerald else AbColors.Gold)
+                                }
+                                LinearProgressIndicator(
+                                    progress = { progress.coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                    color = if (progress >= 1f) AbColors.Emerald else AbColors.Cyan,
+                                    trackColor = AbColors.Charcoal4,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3: المتجر والصناديق
+                3 -> {
+                    item { SectionHeader("صناديق الغنائم ومتجر الصيادين") }
+                    val chests = listOf(
+                        Triple("صندوق الصياد البرونزي", "يحتوي على ذهب عشوائي وشظايا أبطال", "200 ذهب" to AbColors.Orange),
+                        Triple("صندوق الأساطير الذهبي", "فرصة عالية للحصول على بطل نادر وجواهر", "15 جوهرة" to AbColors.BrightGold),
+                        Triple("شحنة الطاقة الكاملة", "يستعيد طاقة الصياد بالكامل فوراً", "5 جواهر" to AbColors.Emerald),
+                    )
+                    itemsIndexed(chests, key = { idx, _ -> "chest_$idx" }) { _, (cName, cDesc, pair) ->
+                        val (cost, color) = pair
+                        GlassCard(borderColor = color.copy(alpha = 0.4f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(icon = AbIcons.CardGiftcard, brush = AbColors.GoldGradient)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(cName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                                    Text(cDesc, style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                Pill(cost, color = color)
+                            }
+                        }
+                    }
+                }
+
+                // 4: المتصدرون
+                else -> {
+                    val list = board
+                    when {
+                        list == null -> item { LoadingState(Modifier.padding(24.dp)) }
+                        list.isEmpty() -> item { EmptyState(title = stringResource(R.string.games_empty_board), icon = AbIcons.Leaderboard) }
+                        else -> itemsIndexed(list, key = { _, e -> e.uid }) { i, e ->
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (i < 3) AbColors.DeepPurple.copy(alpha = 0.25f) else AbColors.Charcoal2).padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(stringResource(R.string.games_rank, i + 1), style = MaterialTheme.typography.titleMedium, color = if (i < 3) AbColors.Gold else AbColors.TextMuted, modifier = Modifier.width(44.dp))
+                                Avatar(e.avatar, e.name, size = 40.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(e.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.games_level_short, e.level), style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                }
+                                Text(compactCount(e.score), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AbColors.Cyan)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -296,8 +512,6 @@ fun GamePlayScreen(onExit: () -> Unit, viewModel: GamesViewModel = hiltViewModel
     LaunchedEffect(Unit) { viewModel.saved.collect { p -> snackbar.showSnackbar(context.getString(R.string.games_saved, p.level, p.gold.toInt())) } }
     LaunchedEffect(Unit) { viewModel.started.collect { world = GameWorld(speedBonus = character.speed / 110f); submitted = false } }
 
-    // Reading the frame tick here re-runs this scope every frame so HUD text and the
-    // game-over card reflect the (non-snapshot) simulation state.
     val tick = frame
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF05050F), Color(0xFF1E1B4B))))) {
         val heightDp = LocalConfiguration.current.screenHeightDp
@@ -309,7 +523,6 @@ fun GamePlayScreen(onExit: () -> Unit, viewModel: GamesViewModel = hiltViewModel
             val groundY = size.height * 0.72f
             drawRect(Color(0xFF12121B), topLeft = Offset(0f, groundY), size = Size(size.width, size.height - groundY))
             drawLine(AbColors.Violet, Offset(0f, groundY), Offset(size.width, groundY), strokeWidth = 3f)
-            // Player
             val px = GameWorld.PLAYER_X * scale
             val pSize = GameWorld.PLAYER_SIZE * scale
             val py = groundY - (world.playerY * scale) - pSize

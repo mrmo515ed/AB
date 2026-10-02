@@ -5,8 +5,12 @@ import com.animeblack.core.common.result.AppError
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
+import com.animeblack.core.data.firebase.awaitWrite
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.mapList
 import com.animeblack.core.data.firebase.obj
+import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.firebase.str
 import com.animeblack.core.data.firebase.toStringKeyed
 import com.animeblack.core.data.media.MediaPreparer
@@ -25,7 +29,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Executes outbox operations. Each handler is idempotent: document ids are client-generated and
@@ -42,42 +47,45 @@ class OutboxProcessor @Inject constructor(
     private val errorMapper: FirebaseErrorMapper,
 ) {
     private val json get() = outbox.json
+    private val mutex = Mutex()
 
     /** @return true when nothing retryable is left. */
-    suspend fun processAll(): Boolean = coroutineScope {
-        val uid = auth.currentUser?.uid ?: return@coroutineScope true
-        dao.resetRunning()
-        var needsRetry = false
-        val attempted = mutableSetOf<String>()
-        while (true) {
-            val batch = dao.nextBatch(uid).filter { it.state == PendingOperation.STATE_QUEUED && it.id !in attempted }
-            if (batch.isEmpty()) break
-            for (op in batch) {
-                attempted += op.id
-                val now = System.currentTimeMillis()
-                dao.updateState(op.id, PendingOperation.STATE_RUNNING, op.attempts, null, now)
-                try {
-                    execute(op, this)
-                    dao.delete(op.id)
-                } catch (c: CancellationException) {
-                    dao.updateState(op.id, PendingOperation.STATE_QUEUED, op.attempts, null, System.currentTimeMillis())
-                    throw c
-                } catch (t: Throwable) {
-                    val error = errorMapper.map(t)
-                    val attempts = op.attempts + 1
-                    val retry = error.isRetryable && attempts < PendingOperation.MAX_ATTEMPTS
-                    dao.updateState(
-                        op.id,
-                        if (retry) PendingOperation.STATE_QUEUED else PendingOperation.STATE_FAILED,
-                        attempts,
-                        error.javaClass.simpleName + ": " + (t.message ?: "").take(200),
-                        System.currentTimeMillis(),
-                    )
-                    if (retry) needsRetry = true
+    suspend fun processAll(): Boolean = mutex.withLock {
+        coroutineScope {
+            val uid = auth.activeUid() ?: return@coroutineScope true
+            dao.resetRunning()
+            var needsRetry = false
+            val attempted = mutableSetOf<String>()
+            while (true) {
+                val batch = dao.nextBatch(uid).filter { it.state == PendingOperation.STATE_QUEUED && it.id !in attempted }
+                if (batch.isEmpty()) break
+                for (op in batch) {
+                    attempted += op.id
+                    val now = System.currentTimeMillis()
+                    dao.updateState(op.id, PendingOperation.STATE_RUNNING, op.attempts, null, now)
+                    try {
+                        execute(op, this)
+                        dao.delete(op.id)
+                    } catch (c: CancellationException) {
+                        dao.updateState(op.id, PendingOperation.STATE_QUEUED, op.attempts, null, System.currentTimeMillis())
+                        throw c
+                    } catch (t: Throwable) {
+                        val error = errorMapper.map(t)
+                        val attempts = op.attempts + 1
+                        val retry = error.isRetryable && attempts < PendingOperation.MAX_ATTEMPTS
+                        dao.updateState(
+                            op.id,
+                            if (retry) PendingOperation.STATE_QUEUED else PendingOperation.STATE_FAILED,
+                            attempts,
+                            error.javaClass.simpleName + ": " + (t.message ?: "").take(200),
+                            System.currentTimeMillis(),
+                        )
+                        if (retry) needsRetry = true
+                    }
                 }
             }
+            !needsRetry
         }
-        !needsRetry
     }
 
     private suspend fun execute(op: PendingOperation, scope: CoroutineScope) {
@@ -119,7 +127,11 @@ class OutboxProcessor @Inject constructor(
         return result
     }
 
-    private fun cleanup(files: List<UploadFile>) = files.forEach { preparer.deleteLocal(it.localUri) }
+    private fun cleanup(files: List<UploadFile>) = files.forEach { f ->
+        if (f.downloadUrl != null && !f.downloadUrl.startsWith("file:")) {
+            preparer.deleteLocal(f.localUri)
+        }
+    }
 
     private fun UploadFile.toAttachment(): Map<String, Any?> = mapOf(
         "type" to type,
@@ -163,16 +175,16 @@ class OutboxProcessor @Inject constructor(
                 "updatedAt" to System.currentTimeMillis(),
             )
             if (media != null) update["media"] = media
-            ref.set(update, SetOptions.merge()).await()
+            ref.set(update, SetOptions.merge()).awaitWrite()
         } else {
-            ref.set(postDocument(payload, media)).await()
+            ref.set(postDocument(payload, media)).awaitWrite()
         }
         cleanup(uploaded)
     }
 
     // ------------------------------------------------------------------ chat
     private suspend fun sendChatMedia(op: PendingOperation, scope: CoroutineScope) {
-        val uid = auth.currentUser?.uid ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         var payload = json.decodeFromString(ChatMediaPayload.serializer(), op.payload)
         val uploaded = uploadAll(op, payload.files, scope) { files ->
             payload = payload.copy(files = files)
@@ -221,8 +233,8 @@ class OutboxProcessor @Inject constructor(
                 "unreadCounts" to mapOf(payload.partnerId to FieldValue.increment(1)),
             ),
             SetOptions.merge(),
-        ).await()
-        chatRef.collection(Collections.MESSAGES).document(payload.messageId).set(message).await()
+        ).awaitWrite()
+        chatRef.collection(Collections.MESSAGES).document(payload.messageId).set(message).awaitWrite()
         cleanup(uploaded)
     }
 
@@ -237,7 +249,7 @@ class OutboxProcessor @Inject constructor(
     }
 
     private suspend fun sendRoomMedia(op: PendingOperation, scope: CoroutineScope) {
-        val uid = auth.currentUser?.uid ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         var payload = json.decodeFromString(RoomMediaPayload.serializer(), op.payload)
         val uploaded = uploadAll(op, payload.files, scope) { files ->
             payload = payload.copy(files = files)
@@ -267,24 +279,24 @@ class OutboxProcessor @Inject constructor(
         when (payload.kind) {
             "group" -> {
                 val groupRef = firestore.collection(Collections.GROUPS).document(payload.roomId)
-                groupRef.collection(Collections.MESSAGES).document(payload.messageId).set(message).await()
+                groupRef.collection(Collections.MESSAGES).document(payload.messageId).set(message).awaitWrite()
                 groupRef.set(
                     mapOf("lastMsg" to previewFor(type, payload.text, uploaded.size), "lastAt" to payload.at, "updatedAt" to System.currentTimeMillis()),
                     SetOptions.merge(),
-                ).await()
+                ).awaitWrite()
             }
             "world" -> firestore.collection(Collections.WORLDS).document(payload.roomId)
-                .collection(Collections.MESSAGES).document(payload.messageId).set(message).await()
+                .collection(Collections.MESSAGES).document(payload.messageId).set(message).awaitWrite()
             else -> firestore.collection(Collections.COMMUNITIES).document(payload.roomId)
                 .collection(Collections.CHANNELS).document(payload.channelId ?: "general")
-                .collection(Collections.MESSAGES).document(payload.messageId).set(message).await()
+                .collection(Collections.MESSAGES).document(payload.messageId).set(message).awaitWrite()
         }
         cleanup(uploaded)
     }
 
     // ------------------------------------------------------------------ stories & reels
     private suspend fun publishStory(op: PendingOperation, scope: CoroutineScope) {
-        val uid = auth.currentUser?.uid ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         var payload = json.decodeFromString(StoryPublishPayload.serializer(), op.payload)
         val uploaded = uploadAll(op, listOfNotNull(payload.file), scope) { files ->
             payload = payload.copy(file = files.firstOrNull())
@@ -325,12 +337,12 @@ class OutboxProcessor @Inject constructor(
             doc["views"] = emptyList<Any>()
             doc["reactions"] = emptyList<Any>()
         }
-        firestore.collection(Collections.STORIES).document(payload.storyId).set(doc, SetOptions.merge()).await()
+        firestore.collection(Collections.STORIES).document(payload.storyId).set(doc, SetOptions.merge()).awaitWrite()
         cleanup(uploaded)
     }
 
     private suspend fun publishReel(op: PendingOperation, scope: CoroutineScope) {
-        val uid = auth.currentUser?.uid ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         var payload = json.decodeFromString(ReelPublishPayload.serializer(), op.payload)
         val uploaded = uploadAll(op, listOf(payload.file), scope) { files ->
             payload = payload.copy(file = files.first())
@@ -357,48 +369,45 @@ class OutboxProcessor @Inject constructor(
             "createdAt" to payload.createdAt,
             "platform" to "android",
         )
-        firestore.collection(Collections.REELS).document(payload.reelId).set(reel).await()
+        firestore.collection(Collections.REELS).document(payload.reelId).set(reel).awaitWrite()
         cleanup(uploaded)
     }
 
     private suspend fun uploadProfileMedia(op: PendingOperation, scope: CoroutineScope) {
-        val user = auth.currentUser ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         var payload = json.decodeFromString(ProfileMediaPayload.serializer(), op.payload)
         val uploaded = uploadAll(op, listOf(payload.file), scope) { files ->
             payload = payload.copy(file = files.first())
             dao.updatePayload(op.id, json.encodeToString(ProfileMediaPayload.serializer(), payload), System.currentTimeMillis())
         }
         val url = uploaded.first().downloadUrl.orEmpty()
-        firestore.collection(Collections.USERS).document(user.uid)
-            .set(mapOf(payload.field to url, "updatedAt" to System.currentTimeMillis()), SetOptions.merge()).await()
-        if (payload.field == "avatar") {
+        firestore.collection(Collections.USERS).document(uid)
+            .set(mapOf(payload.field to url, "updatedAt" to System.currentTimeMillis()), SetOptions.merge()).awaitWrite()
+        if (payload.field == "avatar" && !url.startsWith("data:")) {
             try {
-                user.updateProfile(UserProfileChangeRequest.Builder().setPhotoUri(Uri.parse(url)).build()).await()
+                auth.currentUser?.updateProfile(UserProfileChangeRequest.Builder().setPhotoUri(Uri.parse(url)).build())?.awaitWrite()
             } catch (_: Exception) {
             }
         }
         cleanup(uploaded)
     }
 
-    // ------------------------------------------------------------------ poll votes (transaction)
+    // ------------------------------------------------------------------ poll votes
     private suspend fun votePoll(op: PendingOperation) {
-        val uid = auth.currentUser?.uid ?: throw AppErrorException(AppError.Unauthenticated())
+        val uid = auth.requireUid()
         val payload = json.decodeFromString(PollVotePayload.serializer(), op.payload)
         val ref = firestore.collection(Collections.POSTS).document(payload.postId)
-        firestore.runTransaction { tx ->
-            val snap = tx.get(ref)
-            val data = snap.data ?: return@runTransaction null
-            val poll = (data["poll"] as? Map<*, *>)?.toStringKeyed() ?: return@runTransaction null
-            val votes = poll.obj("votes").orEmpty()
-            if (votes.containsKey(uid)) return@runTransaction null
-            val options = poll.mapList("options").mapIndexed { i, o ->
-                val id = o.str("id").ifBlank { i.toString() }
-                if (id == payload.optionId) o + ("v" to ((o["v"] as? Number)?.toLong() ?: 0L) + 1) else o
-            }
-            val newPoll = poll + mapOf("options" to options, "votes" to votes + (uid to payload.optionId))
-            tx.update(ref, mapOf("poll" to newPoll, "updatedAt" to System.currentTimeMillis()))
-            null
-        }.await()
+        val snap = ref.getFast(preferCache = true) ?: return
+        val data = snap.data ?: return
+        val poll = (data["poll"] as? Map<*, *>)?.toStringKeyed() ?: return
+        val votes = poll.obj("votes").orEmpty()
+        if (votes.containsKey(uid)) return
+        val options = poll.mapList("options").mapIndexed { i, o ->
+            val id = o.str("id").ifBlank { i.toString() }
+            if (id == payload.optionId) o + ("v" to ((o["v"] as? Number)?.toLong() ?: 0L) + 1) else o
+        }
+        val newPoll = poll + mapOf("options" to options, "votes" to votes + (uid to payload.optionId))
+        ref.update(mapOf("poll" to newPoll, "updatedAt" to System.currentTimeMillis())).awaitWrite()
     }
 
     companion object {

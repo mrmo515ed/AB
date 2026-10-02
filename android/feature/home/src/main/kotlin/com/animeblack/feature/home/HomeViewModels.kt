@@ -123,7 +123,7 @@ class HomeViewModel @Inject constructor(
             val r = economy.claimDailyReward()
             claimingDaily.value = false
             if (r is AppResult.Success) {
-                _dailyClaimedText.tryEmit("🎁 تم استلام المكافأة اليومية: +${r.data.rewardCoins} عملة و +${r.data.rewardGems} جوهرة!")
+                _dailyClaimedText.tryEmit("تم استلام المكافأة اليومية: +${r.data.rewardCoins} عملة و +${r.data.rewardGems} جوهرة!")
             } else {
                 emitError(r)
             }

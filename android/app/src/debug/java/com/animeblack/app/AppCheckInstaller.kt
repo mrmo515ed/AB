@@ -4,11 +4,12 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 
 /**
- * Debug builds use the App Check debug provider: the debug secret is printed to Logcat once and
- * must be registered in Firebase Console → App Check → Manage debug tokens.
+ * Optional App Check installer for debug builds. Disabled by default so sideloaded builds whose
+ * random debug secret has not been registered in Firebase Console never stall Firestore/Storage requests.
  */
 object AppCheckInstaller {
-    fun install() {
+    fun install(enabled: Boolean = false) {
+        if (!enabled) return
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance())
     }
 }

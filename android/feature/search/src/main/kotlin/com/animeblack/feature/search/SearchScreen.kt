@@ -231,13 +231,14 @@ fun SearchScreen(onBack: () -> Unit, navigate: (Any) -> Unit, openMention: (Stri
                         }
                     }
                     item {
-                        SectionHeader("✨ استكشاف سريع حسب المزاج", modifier = Modifier.padding(horizontal = 16.dp))
+                        SectionHeader("استكشاف سريع حسب المزاج", modifier = Modifier.padding(horizontal = 16.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             com.animeblack.core.designsystem.component.GlowChip(
-                                text = "🔥 الرائج الآن",
+                                text = "الرائج الآن",
+                                icon = AbIcons.LocalFireDepartment,
                                 accentColor = AbColors.Rose,
                                 onClick = {
                                     viewModel.tab.value = SearchTab.Posts
@@ -245,7 +246,8 @@ fun SearchScreen(onBack: () -> Unit, navigate: (Any) -> Unit, openMention: (Stri
                                 },
                             )
                             com.animeblack.core.designsystem.component.GlowChip(
-                                text = "📺 أنمي الموسم",
+                                text = "أنمي الموسم",
+                                icon = AbIcons.LiveTv,
                                 accentColor = AbColors.Cyan,
                                 onClick = {
                                     viewModel.tab.value = SearchTab.Anime
@@ -253,7 +255,8 @@ fun SearchScreen(onBack: () -> Unit, navigate: (Any) -> Unit, openMention: (Stri
                                 },
                             )
                             com.animeblack.core.designsystem.component.GlowChip(
-                                text = "🎨 فنون وميمز",
+                                text = "فنون وميمز",
+                                icon = AbIcons.Palette,
                                 accentColor = AbColors.Gold,
                                 onClick = {
                                     viewModel.tab.value = SearchTab.Posts

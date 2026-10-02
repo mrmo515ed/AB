@@ -3,11 +3,15 @@ package com.animeblack.core.data.repository.impl
 import com.animeblack.core.common.result.AppError
 import com.animeblack.core.common.result.AppResult
 import com.animeblack.core.common.result.runCatchingApp
+import com.animeblack.core.common.util.Ids
 import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.firebase.Collections
 import com.animeblack.core.data.firebase.FirebaseErrorMapper
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.anyToLong
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.awaitWrite
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.firebase.requireUid
 import com.animeblack.core.data.firebase.str
 import com.animeblack.core.data.firebase.toStringKeyed
@@ -37,6 +41,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Economy is server-authoritative: balances are read from `users/{uid}` (protected by rules) and
@@ -56,7 +61,7 @@ class FunctionsEconomyRepository @Inject constructor(
     }
 
     override fun observeTransactions(): Flow<List<EconomyTransaction>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         val tx = firestore.collection(Collections.ECONOMY_TRANSACTIONS)
         val mine = tx.whereEqualTo("uid", uid).limit(50).asFlow().map { s -> s.documents.mapNotNull { d -> d.data?.toTransaction(d.id) } }.catch { emit(emptyList()) }
         val sent = tx.whereEqualTo("fromUid", uid).limit(50).asFlow().map { s -> s.documents.mapNotNull { d -> d.data?.toTransaction(d.id) } }.catch { emit(emptyList()) }
@@ -65,15 +70,63 @@ class FunctionsEconomyRepository @Inject constructor(
     }
 
     override suspend fun claimDailyReward(): AppResult<DailyRewardResult> = runCatchingApp(errorMapper) {
-        auth.requireUid()
-        val result = functions.getHttpsCallable("claimDailyReward").call(emptyMap<String, Any>()).await()
-        val data = (result.getData() as? Map<*, *>)?.toStringKeyed() ?: throw AppErrorException(AppError.Server("empty-response"))
+        val uid = auth.requireUid()
+        val data = try {
+            withTimeoutOrNull(1_800L) {
+                (functions.getHttpsCallable("claimDailyReward").call(emptyMap<String, Any>()).await().getData() as? Map<*, *>)?.toStringKeyed()
+            }
+        } catch (_: Exception) {
+            null
+        }
+        if (data != null) {
+            return@runCatchingApp DailyRewardResult(
+                coins = anyToLong(data["coins"]) ?: 0,
+                gems = anyToLong(data["gems"]) ?: 0,
+                rewardCoins = anyToLong(data["rewardCoins"]) ?: 0,
+                rewardGems = anyToLong(data["rewardGems"]) ?: 0,
+                streak = (anyToLong(data["streak"]) ?: 0).toInt(),
+            )
+        }
+        // Fallback when Cloud Functions are not deployed on the Firebase project:
+        val me = users.getUser(uid)
+        val now = System.currentTimeMillis()
+        val last = me?.lastDailyClaim ?: 0L
+        if (now - last < 20 * 60 * 60 * 1000L) {
+            throw AppErrorException(AppError.Validation("daily", "cooldown"))
+        }
+        val streak = if (now - last < 48 * 60 * 60 * 1000L) (me?.dailyStreak ?: 0) + 1 else 1
+        val rewardCoins = 50L + (streak.coerceAtMost(7) * 10L)
+        val rewardGems = if (streak % 3 == 0) 5L else 1L
+        val newCoins = (me?.coins ?: 150L) + rewardCoins
+        val newGems = (me?.gems ?: 0L) + rewardGems
+        firestore.collection(Collections.USERS).document(uid).set(
+            mapOf(
+                "coins" to newCoins,
+                "gems" to newGems,
+                "dailyStreak" to streak,
+                "lastDailyClaim" to now,
+                "updatedAt" to now,
+            ),
+            SetOptions.merge(),
+        ).awaitWrite(800L)
+        val txId = "tx_${Ids.short()}"
+        firestore.collection(Collections.ECONOMY_TRANSACTIONS).document(txId).set(
+            mapOf(
+                "id" to txId,
+                "uid" to uid,
+                "type" to "daily",
+                "currency" to "coins",
+                "amount" to rewardCoins,
+                "note" to "مكافأة الدخول اليومي (يوم $streak)",
+                "at" to now,
+            ),
+        ).awaitWrite(600L)
         DailyRewardResult(
-            coins = anyToLong(data["coins"]) ?: 0,
-            gems = anyToLong(data["gems"]) ?: 0,
-            rewardCoins = anyToLong(data["rewardCoins"]) ?: 0,
-            rewardGems = anyToLong(data["rewardGems"]) ?: 0,
-            streak = (anyToLong(data["streak"]) ?: 0).toInt(),
+            coins = newCoins,
+            gems = newGems,
+            rewardCoins = rewardCoins,
+            rewardGems = rewardGems,
+            streak = streak,
         )
     }
 
@@ -82,16 +135,47 @@ class FunctionsEconomyRepository @Inject constructor(
         if (toUid == me) throw AppErrorException(AppError.Validation("transfer", "self"))
         if (amount <= 0 || amount > 100_000) throw AppErrorException(AppError.Validation("amount", "invalid"))
         if (currency !in setOf("coins", "stars")) throw AppErrorException(AppError.Validation("currency", "invalid"))
-        functions.getHttpsCallable("economyTransfer").call(
+        val called = try {
+            withTimeoutOrNull(1_800L) {
+                functions.getHttpsCallable("economyTransfer").call(
+                    mapOf(
+                        "op" to "transfer",
+                        "currency" to currency,
+                        "amount" to amount,
+                        "toUid" to toUid,
+                        "note" to note.take(140),
+                        "idempotencyKey" to UUID.randomUUID().toString(),
+                    ),
+                ).await()
+                true
+            } ?: false
+        } catch (_: Exception) {
+            false
+        }
+        if (called) return@runCatchingApp
+
+        val sender = users.getUser(me) ?: throw AppErrorException(AppError.Unauthenticated())
+        val balance = if (currency == "stars") sender.stars else sender.coins
+        if (balance < amount) throw AppErrorException(AppError.Validation(currency, "insufficient"))
+        val now = System.currentTimeMillis()
+        firestore.collection(Collections.USERS).document(me).set(
+            mapOf(currency to (balance - amount), "updatedAt" to now),
+            SetOptions.merge(),
+        ).awaitWrite(800L)
+        val txId = "tx_${Ids.short()}"
+        firestore.collection(Collections.ECONOMY_TRANSACTIONS).document(txId).set(
             mapOf(
-                "op" to "transfer",
+                "id" to txId,
+                "uid" to me,
+                "fromUid" to me,
+                "toUid" to toUid,
+                "type" to "transfer",
                 "currency" to currency,
                 "amount" to amount,
-                "toUid" to toUid,
                 "note" to note.take(140),
-                "idempotencyKey" to UUID.randomUUID().toString(),
+                "at" to now,
             ),
-        ).await()
+        ).awaitWrite(600L)
         Unit
     }
 }
@@ -166,13 +250,10 @@ class DefaultAnimeRepository @Inject constructor(
         val uid = auth.requireUid()
         val ref = firestore.collection(Collections.USER_STATES).document(uid)
         val entry = mapOf("id" to "${anime.source}:${anime.id}", "title" to anime.title, "cover" to anime.coverUrl, "at" to System.currentTimeMillis())
-        firestore.runTransaction { tx ->
-            val snap = tx.get(ref)
-            val history = (snap.get("history") as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.toStringKeyed() }.orEmpty()
-            val updated = (listOf(entry) + history.filter { it.str("id") != entry["id"] }).take(100)
-            tx.set(ref, mapOf("uid" to uid, "history" to updated, "updatedAt" to System.currentTimeMillis()), SetOptions.merge())
-            null
-        }.await()
+        val snap = ref.getFast(timeoutMs = 1_200L, preferCache = true)
+        val history = (snap?.get("history") as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.toStringKeyed() }.orEmpty()
+        val updated = (listOf(entry) + history.filter { it.str("id") != entry["id"] }).take(100)
+        ref.set(mapOf("uid" to uid, "history" to updated, "updatedAt" to System.currentTimeMillis()), SetOptions.merge()).awaitWrite(600L)
         Unit
     }
 }

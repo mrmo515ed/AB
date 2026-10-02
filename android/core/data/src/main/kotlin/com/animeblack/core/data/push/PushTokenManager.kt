@@ -2,6 +2,8 @@ package com.animeblack.core.data.push
 
 import com.animeblack.core.common.config.AppConfig
 import com.animeblack.core.data.firebase.Collections
+import com.animeblack.core.data.firebase.activeUid
+import com.animeblack.core.data.firebase.awaitWrite
 import com.animeblack.core.data.session.DeviceInfo
 import com.animeblack.core.datastore.SettingsDataSource
 import com.google.firebase.auth.FirebaseAuth
@@ -11,6 +13,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Stores the FCM token as `users/{uid}/devices/{token}` — exactly where the Cloud Functions
@@ -25,21 +28,21 @@ class PushTokenManager @Inject constructor(
     private val config: AppConfig,
 ) {
     suspend fun register() {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.activeUid() ?: return
         if (!settings.current().notificationsEnabled) {
             unregister()
             return
         }
         val token = try {
-            messaging.token.await()
+            withTimeoutOrNull(1_500L) { messaging.token.await() }
         } catch (_: Exception) {
-            return
-        }
+            null
+        } ?: return
         saveToken(uid, token)
     }
 
     suspend fun onNewToken(token: String) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.activeUid() ?: return
         if (!settings.current().notificationsEnabled) return
         saveToken(uid, token)
     }
@@ -57,20 +60,18 @@ class PushTokenManager @Inject constructor(
         try {
             firestore.collection(Collections.USERS).document(uid)
                 .collection(Collections.DEVICES).document(token)
-                .set(data, SetOptions.merge()).await()
+                .set(data, SetOptions.merge()).awaitWrite(600L)
         } catch (_: Exception) {
-            // Queued offline by Firestore.
         }
     }
 
-    /** Must run *before* signing out so the security rules still allow deleting the device doc. */
     suspend fun unregister() {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.activeUid() ?: return
         try {
-            val token = messaging.token.await()
+            val token = withTimeoutOrNull(1_000L) { messaging.token.await() } ?: return
             firestore.collection(Collections.USERS).document(uid)
-                .collection(Collections.DEVICES).document(token).delete().await()
-            messaging.deleteToken().await()
+                .collection(Collections.DEVICES).document(token).delete().awaitWrite(600L)
+            withTimeoutOrNull(1_000L) { messaging.deleteToken().await() }
         } catch (_: Exception) {
         }
     }

@@ -2,7 +2,9 @@ package com.animeblack.core.data.repository.impl
 
 import com.animeblack.core.common.util.Ids
 import com.animeblack.core.data.firebase.Collections
+import com.animeblack.core.data.firebase.activeUid
 import com.animeblack.core.data.firebase.asFlow
+import com.animeblack.core.data.firebase.getFast
 import com.animeblack.core.data.mapper.toBroadcast
 import com.animeblack.core.data.mapper.toNotification
 import com.animeblack.core.data.repository.NotificationRepository
@@ -31,10 +33,10 @@ class FirestoreNotificationRepository @Inject constructor(
     private val notifications get() = firestore.collection(Collections.NOTIFICATIONS)
 
     override fun observeNotifications(): Flow<List<AppNotification>> {
-        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
-        // Uses the composite index notifications(userId ↑, at ↓) from firestore.indexes.json.
+        val uid = auth.activeUid() ?: return flowOf(emptyList())
         return notifications.whereEqualTo("userId", uid).orderBy("at", Query.Direction.DESCENDING).limit(100).asFlow()
             .map { snap -> snap.documents.mapNotNull { d -> d.data?.toNotification(d.id) } }
+            .catch { emit(emptyList()) }
     }
 
     override fun observeUnreadCount(): Flow<Int> = observeNotifications().map { list -> list.count { !it.read } }.catch { emit(0) }
@@ -49,9 +51,9 @@ class FirestoreNotificationRepository @Inject constructor(
     }
 
     override suspend fun markAllRead() {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.activeUid() ?: return
         try {
-            val unread = notifications.whereEqualTo("userId", uid).whereEqualTo("read", false).limit(400).get().await()
+            val unread = notifications.whereEqualTo("userId", uid).whereEqualTo("read", false).limit(400).getFast(timeoutMs = 1_500L, preferCache = true) ?: return
             if (unread.isEmpty) return
             val batch = firestore.batch()
             unread.documents.forEach { batch.update(it.reference, mapOf("read" to true)) }
@@ -65,7 +67,7 @@ class FirestoreNotificationRepository @Inject constructor(
     }
 
     override suspend fun notifyUser(toUid: String, type: String, title: String, body: String, postId: String?, storyId: String?, link: String?) {
-        val me = auth.currentUser?.uid ?: return
+        val me = auth.activeUid() ?: return
         if (toUid.isBlank() || toUid == me) return
         val profile = users.get().getUser(me)
         val id = Ids.notification()

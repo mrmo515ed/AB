@@ -60,8 +60,8 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun providesStorage(app: FirebaseApp): FirebaseStorage = FirebaseStorage.getInstance(app).apply {
-        maxUploadRetryTimeMillis = 120_000
-        maxOperationRetryTimeMillis = 60_000
+        maxUploadRetryTimeMillis = 3_500
+        maxOperationRetryTimeMillis = 3_500
     }
 
     @Provides
