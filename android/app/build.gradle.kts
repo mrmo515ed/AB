@@ -53,6 +53,14 @@ fun hasAndroidOauthClient(packageName: String): Boolean =
 /** R8 mapping upload needs Crashlytics enabled in the console; opt in with -Panimeblack.crashlyticsMappingUpload=true. */
 val crashlyticsMappingUpload = providers.gradleProperty("animeblack.crashlyticsMappingUpload").orNull == "true"
 
+/**
+ * Optional server address baked into the APK (empty by default).
+ * Leave empty to configure it on the device: Settings → Sync diagnostics → AI server.
+ * Set it here (or with -Panimeblack.apiBaseUrl / the ANIMEBLACK_APIBASEURL environment) when the
+ * app should point at your server out of the box.
+ */
+val bakedServerUrl = ""
+
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -75,7 +83,7 @@ android {
         buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"${providers.gradleProperty("animeblack.firestoreDatabaseId").orNull ?: "(default)"}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${providers.gradleProperty("animeblack.googleWebClientId").orNull ?: googleWebClientId("com.animeblack.app")}\"")
         buildConfigField("boolean", "HAS_ANDROID_OAUTH_CLIENT", "${hasAndroidOauthClient("com.animeblack.app")}")
-        buildConfigField("String", "API_BASE_URL", "\"${secret("animeblack.apiBaseUrl").orEmpty()}\"")
+        buildConfigField("String", "API_BASE_URL", "\"${secret("animeblack.apiBaseUrl") ?: bakedServerUrl}\"")
         buildConfigField("String", "API_TOKEN", "\"${secret("animeblack.apiToken").orEmpty()}\"")
     }
 

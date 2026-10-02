@@ -409,7 +409,16 @@ app.get("/api/anime/trending", async (req, res) => {
 
     res.status(502).json({ success: false, error: "تعذر جلب الأنميات الشائعة حالياً." });
   } catch (err) {
-    res.status(500).json({ success: false, error: err?.message });
+    console.error("Anime trending route error:", err);
+    // Unreachable provider (network/DNS) is a gateway problem, not an internal 500.
+    const msg = String(err?.message || err || "");
+    const isNetworkFailure = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|network|SSL/i.test(msg);
+    res.status(isNetworkFailure ? 502 : 500).json({
+      success: false,
+      error: isNetworkFailure
+        ? "تعذر الوصول إلى مزودات بيانات الأنمي الخارجية حالياً."
+        : err?.message,
+    });
   }
 });
 

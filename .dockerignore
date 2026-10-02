@@ -1,0 +1,19 @@
+# Never ship these into the image.
+.git
+.github
+node_modules
+functions/node_modules
+functions/lib
+android/**/build
+android/.gradle
+android/tester
+android/apk
+android/ci-reports
+dist
+coverage
+playwright-report
+test-results
+*.log
+.env
+.env.*
+!.env.example

@@ -1,0 +1,23 @@
+# Render blueprint (https://render.com) — one-click deployment of the Anime Black server.
+# In Render: New + → Blueprint → connect this repository → Render reads this file.
+# Then open the service → Environment → add GEMINI_API_KEY (and optionally the tokens).
+services:
+  - type: web
+    name: anime-black
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ANIMEBLACK_TRUST_PROXY
+        value: "1"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANIMEBLACK_AGENT_TOKEN
+        sync: false
+      - key: ANIMEBLACK_ADMIN_TOKEN
+        sync: false
