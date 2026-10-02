@@ -249,27 +249,28 @@ fun PostCard(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            REACTIONS.forEach { item ->
-                val selected = myReaction == item.key
-                val count = post.reactionCounts[item.key] ?: 0
+            listOf("love", "fire", "laugh", "wow", "sad", "clap").forEach { key ->
+                val style = reactionStyle(key)
+                val selected = myReaction == key
+                val count = post.reactionCounts[key] ?: 0
                 val shape = RoundedCornerShape(50)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(shape)
-                        .background(if (selected) item.color.copy(alpha = 0.22f) else AbColors.Ink.copy(alpha = 0.55f))
-                        .border(1.dp, if (selected) item.color else Color(0x1AFFFFFF), shape)
-                        .clickable { actions.onReact(post, item.key) }
+                        .background(if (selected) style.color.copy(alpha = 0.22f) else AbColors.Ink.copy(alpha = 0.55f))
+                        .border(1.dp, if (selected) style.color else Color(0x1AFFFFFF), shape)
+                        .clickable { actions.onReact(post, key) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
-                    AbIcon(item.icon, null, tint = if (selected) item.color else item.color.copy(alpha = 0.85f), size = 15.dp)
+                    AbIcon(style.icon, null, tint = if (selected) style.color else style.color.copy(alpha = 0.85f), size = 15.dp)
                     if (count > 0 || selected) {
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = (if (selected && count == 0) 1 else count).toString(),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (selected) item.color else AbColors.TextSecondary,
+                            color = if (selected) style.color else AbColors.TextSecondary,
                         )
                     }
                 }

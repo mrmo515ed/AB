@@ -72,7 +72,18 @@ internal suspend fun DocumentReference.getFast(
 }
 
 /** Fast Query read with a bounded timeout and cache fallback. */
-internal suspend fun Query.getFast(timeoutMs: Long = 2_500L): QuerySnapshot? {
+internal suspend fun Query.getFast(
+    timeoutMs: Long = 2_500L,
+    preferCache: Boolean = false,
+): QuerySnapshot? {
+    if (preferCache) {
+        val cached = try {
+            get(Source.CACHE).await()
+        } catch (_: Exception) {
+            null
+        }
+        if (cached != null && !cached.isEmpty) return cached
+    }
     val server = withTimeoutOrNull(timeoutMs) {
         try {
             get().await()
