@@ -735,7 +735,7 @@ private fun HomeDashboardWidget(
                 Spacer(Modifier.width(8.dp))
                 GradientButton(
                     text = "مكافأة اليوم",
-                    icon = AbIcons.CardGiftcard,
+                    icon = AbIcons.Redeem,
                     onClick = onClaimDaily,
                     loading = claimingDaily,
                     brush = AbColors.GoldGradient,

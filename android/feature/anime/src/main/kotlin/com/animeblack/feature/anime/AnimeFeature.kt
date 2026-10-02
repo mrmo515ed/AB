@@ -334,7 +334,7 @@ fun AnimeHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Anime
                                     Pill(q.anime, color = AbColors.DeepPurple)
                                     Spacer(Modifier.weight(1f))
                                     AbIconButton(AbIcons.ContentCopy, "نسخ", onClick = { copyToClipboard(context, "«${q.text}» — ${q.character} (${q.anime})") }, tint = AbColors.TextMuted)
-                                    AbIconButton(AbIcons.Share, "مشاركة", onClick = { context.shareText("«${q.text}» — ${q.character} (${q.anime})") }, tint = AbColors.Cyan)
+                                    AbIconButton(AbIcons.Share, "مشاركة", onClick = { context.shareText("«${q.text}» — ${q.character} (${q.anime})", context.getString(com.animeblack.core.ui.R.string.ui_share_via)) }, tint = AbColors.Cyan)
                                 }
                             }
                         }

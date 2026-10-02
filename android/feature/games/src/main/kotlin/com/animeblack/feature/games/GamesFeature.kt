@@ -201,7 +201,7 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
         "المعركة" to AbIcons.Swords,
         "الأبطال" to AbIcons.Person,
         "المهام" to AbIcons.Bolt,
-        "المتجر والصناديق" to AbIcons.CardGiftcard,
+        "المتجر والصناديق" to AbIcons.Redeem,
         "المتصدرون" to AbIcons.Leaderboard,
     )
 
@@ -314,7 +314,7 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
                     item { SectionHeader("اختيار ساحة القتال (Stages)") }
                     itemsIndexed(stages, key = { _, s -> s.first }) { _, (idx, stName, stDesc) ->
                         GlassCard(
-                            borderColor = if (selectedStage == idx) AbColors.Cyan else AbColors.GlassBorder,
+                            borderColor = if (selectedStage == idx) AbColors.Cyan else AbColors.Line,
                             onClick = { selectedStage = idx },
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -433,7 +433,7 @@ fun GamesHubScreen(onBack: () -> Unit, navigate: (Any) -> Unit, viewModel: Games
                         val (cost, color) = pair
                         GlassCard(borderColor = color.copy(alpha = 0.4f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconTile(icon = AbIcons.CardGiftcard, brush = AbColors.GoldGradient)
+                                IconTile(icon = AbIcons.Redeem, brush = AbColors.GoldGradient)
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(cName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)

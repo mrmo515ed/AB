@@ -175,7 +175,7 @@ private fun QuickAction(@DrawableRes icon: Int, label: String, modifier: Modifie
         modifier
             .clip(RoundedCornerShape(16.dp))
             .background(AbColors.Charcoal2)
-            .border(1.dp, AbColors.GlassBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, AbColors.Line, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -304,10 +304,10 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
                 accent = AbColors.TextSecondary,
                 items = buildList {
                     add(HubItem("settings", "الإعدادات الشاملة", "المظهر، الإشعارات، اللغة، والبيانات", AbIcons.Settings, AbColors.Cyan, "system") { navigate(SettingsRoute) })
-                    add(HubItem("privacy", "الخصوصية والأمان", "من يراسلني، حالة الاتصال، والجلسات النشطة", AbIcons.Security, AbColors.Emerald, "system") { navigate(PrivacySettingsRoute) })
+                    add(HubItem("privacy", "الخصوصية والأمان", "من يراسلني، حالة الاتصال، والجلسات النشطة", AbIcons.Shield, AbColors.Emerald, "system") { navigate(PrivacySettingsRoute) })
                     add(HubItem("sync", "حالة المزامنة والسحابة", "فحص الاتصال اللحظي وصندوق الصادر", AbIcons.CloudOff, AbColors.Blue, "system") { navigate(SyncDiagnosticsRoute) })
                     add(HubItem("gmail", "جناح Gmail والربط السحابي", "توثيق البريد، استرداد الحساب، وإشعارات البريد", AbIcons.Mail, AbColors.Rose, "system") { subPage = MoreSubPage.GmailSuite })
-                    add(HubItem("devs", "مركز المطورين والبوتات", "أدوات البوتات، Webhooks، ومعاينة API", AbIcons.Code, AbColors.Violet, "system") { subPage = MoreSubPage.DeveloperBots })
+                    add(HubItem("devs", "مركز المطورين والبوتات", "أدوات البوتات، Webhooks، ومعاينة API", AbIcons.BugReport, AbColors.Violet, "system") { subPage = MoreSubPage.DeveloperBots })
                     add(HubItem("server", "إعدادات الخادم", "تكوين خادم الوكيل والخدمات السحابية", AbIcons.Dns, AbColors.Gold, "system") { navigate(ServerConfigRoute) })
                     add(HubItem("blocked", "الحسابات المحظورة", "إدارة قائمة الحظر", AbIcons.Block, AbColors.Rose, "system") { navigate(BlockedUsersRoute) })
                     add(HubItem("switch", "تبديل الحساب", "التنقل السريع بين حساباتك المحفوظة", AbIcons.SupervisorAccount, AbColors.Cyan, "system") { navigate(AccountSwitcherRoute) })
@@ -633,7 +633,7 @@ private fun MoreSubScreenHost(
                     )
                     items(frames, key = { it.first }) { (idx, name, color) ->
                         GlassCard(
-                            borderColor = if (selectedRing == idx) color else AbColors.GlassBorder,
+                            borderColor = if (selectedRing == idx) color else AbColors.Line,
                             onClick = { selectedRing = idx },
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -660,10 +660,10 @@ private fun MoreSubScreenHost(
                 MoreSubPage.OtakuStats -> {
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatMiniCard(AbIcons.MilitaryTech, "Lv.${state.wallet.level}", "المستوى", AbColors.Violet, Modifier.weight(1f))
-                            StatMiniCard(AbIcons.StarFilled, compactCount(me?.reputation ?: 15), "السمعة", AbColors.Gold, Modifier.weight(1f))
-                            StatMiniCard(AbIcons.Paid, compactCount(state.wallet.coins), "العملات", AbColors.BrightGold, Modifier.weight(1f))
-                            StatMiniCard(AbIcons.WorkspacePremium, "${me?.badges?.size ?: 1}", "الشارات", AbColors.Cyan, Modifier.weight(1f))
+                            StatMiniCard(icon = AbIcons.MilitaryTech, value = "Lv.${state.wallet.level}", label = "المستوى", iconTint = AbColors.Violet, modifier = Modifier.weight(1f))
+                            StatMiniCard(icon = AbIcons.StarFilled, value = compactCount(me?.reputation ?: 15), label = "السمعة", iconTint = AbColors.Gold, modifier = Modifier.weight(1f))
+                            StatMiniCard(icon = AbIcons.Paid, value = compactCount(state.wallet.coins), label = "العملات", iconTint = AbColors.BrightGold, modifier = Modifier.weight(1f))
+                            StatMiniCard(icon = AbIcons.WorkspacePremium, value = "${me?.badges?.size ?: 1}", label = "الشارات", iconTint = AbColors.Cyan, modifier = Modifier.weight(1f))
                         }
                     }
                     item {
@@ -754,7 +754,7 @@ private fun MoreSubScreenHost(
                         GlassCard(borderColor = AbColors.Violet.copy(alpha = 0.35f)) {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconTile(icon = AbIcons.Code, brush = AbColors.CyanVioletGradient)
+                                    IconTile(icon = AbIcons.BugReport, brush = AbColors.CyanVioletGradient)
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text("بوابة مطوري Anime Black و Webhooks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
@@ -773,7 +773,7 @@ private fun MoreSubScreenHost(
                     items(botTokens, key = { it }) { token ->
                         GlassCard {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AbIcon(AbIcons.SmartToy, null, tint = AbColors.Cyan)
+                                AbIcon(AbIcons.Psychology, null, tint = AbColors.Cyan)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("Bot Token", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
@@ -801,7 +801,7 @@ private fun MoreSubScreenHost(
                                 Text("يوفّر جناح Gmail حماية إضافية لحسابك، استعادة فورية لكلمة المرور، وتنبيهات الأمان المباشرة.", style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
                                 GradientButton(
                                     text = "إدارة أمان الحساب والجلسات",
-                                    icon = AbIcons.Security,
+                                    icon = AbIcons.Shield,
                                     onClick = { navigate(SecurityRoute) },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
@@ -1056,7 +1056,7 @@ fun EconomyScreen(onBack: () -> Unit, viewModel: EconomyViewModel = hiltViewMode
                         Triple("aurora_violet", "Aurora Violet (الشفق البنفسجي)", AbColors.Violet),
                     )
                     items(themes, key = { it.first }) { (id, title, accent) ->
-                        GlassCard(borderColor = if (activeTheme == id) accent else AbColors.GlassBorder, onClick = { activeTheme = id }) {
+                        GlassCard(borderColor = if (activeTheme == id) accent else AbColors.Line, onClick = { activeTheme = id }) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(28.dp).clip(CircleShape).background(accent))
                                 Spacer(Modifier.width(12.dp))
@@ -1145,7 +1145,7 @@ fun LevelsScreen(onBack: () -> Unit, viewModel: LevelsViewModel = hiltViewModel(
             "الشارات" to AbIcons.WorkspacePremium,
             "الألقاب" to AbIcons.MilitaryTech,
             "المستويات" to AbIcons.TrendingUp,
-            "جواز الأوتاكو" to AbIcons.CardGiftcard,
+            "جواز الأوتاكو" to AbIcons.Redeem,
         )
 
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1228,7 +1228,7 @@ fun LevelsScreen(onBack: () -> Unit, viewModel: LevelsViewModel = hiltViewModel(
                     items(allTitles, key = { "title_$it" }) { t ->
                         val active = (selectedTitle.ifBlank { user.equippedTitle.orEmpty() }) == t
                         GlassCard(
-                            borderColor = if (active) AbColors.Cyan else AbColors.GlassBorder,
+                            borderColor = if (active) AbColors.Cyan else AbColors.Line,
                             onClick = { selectedTitle = t },
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1281,9 +1281,9 @@ fun LevelsScreen(onBack: () -> Unit, viewModel: LevelsViewModel = hiltViewModel(
                     }
                     items(tiers, key = { "pass_" + it.first }) { (tier, tierName, reward) ->
                         val unlocked = user.level >= tier
-                        GlassCard(borderColor = if (unlocked) AbColors.Gold.copy(alpha = 0.4f) else AbColors.GlassBorder) {
+                        GlassCard(borderColor = if (unlocked) AbColors.Gold.copy(alpha = 0.4f) else AbColors.Line) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconTile(icon = AbIcons.CardGiftcard, brush = if (unlocked) AbColors.GoldGradient else AbColors.CyanVioletGradient)
+                                IconTile(icon = AbIcons.Redeem, brush = if (unlocked) AbColors.GoldGradient else AbColors.CyanVioletGradient)
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(tierName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
