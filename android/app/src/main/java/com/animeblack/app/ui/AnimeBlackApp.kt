@@ -455,7 +455,7 @@ private fun AppNavHost(navController: NavHostController, viewModel: MainViewMode
         report = { type, id -> navController.navigate(ReportRoute(type, id)) },
         openUrl = { url -> context.openExternalUrl(url) },
         openMention = openMention,
-        openReels = { navController.navigate(ReelsRoute()) },
+        openReels = { navController.navigate(ReelsRoute) },
         openCommunity = { navController.navigate(CommunityRoute) },
         openAnime = { navController.navigate(AnimeHubRoute) },
         openGames = { navController.navigate(GamesHubRoute) },
