@@ -470,7 +470,7 @@ private fun AppNavHost(navController: NavHostController, viewModel: MainViewMode
         enterTransition = { if (reduceMotion) EnterTransition.None else fadeIn(tween(180)) },
         exitTransition = { if (reduceMotion) ExitTransition.None else fadeOut(tween(120)) },
         popEnterTransition = { if (reduceMotion) EnterTransition.None else fadeIn(tween(180)) },
-        popExitTransition = { if (reduceMotion) EnterTransition.None else fadeOut(tween(120)) },
+        popExitTransition = { if (reduceMotion) ExitTransition.None else fadeOut(tween(120)) },
     ) {
         homeGraph(navController, homeNavigator)
         communityGraph(navController, openMention)

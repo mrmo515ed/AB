@@ -416,7 +416,21 @@ async function publishToFileHosts(file, name) {
     attempts.push(`pixeldrain: ${e.message}`);
   }
 
-  // 2) gofile.io (free file host, returns a download page)
+  // 2) catbox.moe (permanent direct .apk download link)
+  const workingLinks = [];
+  try {
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", new Blob([data]), name);
+    const r = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form });
+    const text = r.ok ? (await r.text()).trim() : "";
+    if (r.ok && text.startsWith("https://")) workingLinks.push(text);
+    else attempts.push(`catbox: HTTP ${r.status} ${text.slice(0, 120)}`);
+  } catch (e) {
+    attempts.push(`catbox: ${e.message}`);
+  }
+
+  // 3) gofile.io (free file host, returns a download page)
   try {
     const servers = await (await fetch("https://api.gofile.io/servers")).json();
     const server = servers?.data?.servers?.[0]?.name || "store1";
@@ -424,10 +438,14 @@ async function publishToFileHosts(file, name) {
     form.append("file", new Blob([data]), name);
     const r = await fetch(`https://${server}.gofile.io/contents/uploadfile`, { method: "POST", body: form });
     const json = r.ok ? await r.json() : null;
-    if (json?.data?.downloadPage && json.status === "ok") return { ok: true, text: json.data.downloadPage };
-    attempts.push(`gofile: HTTP ${r.status} ${JSON.stringify(json).slice(0, 120)}`);
+    if (json?.data?.downloadPage && json.status === "ok") workingLinks.push(json.data.downloadPage);
+    else attempts.push(`gofile: HTTP ${r.status} ${JSON.stringify(json).slice(0, 120)}`);
   } catch (e) {
     attempts.push(`gofile: ${e.message}`);
+  }
+
+  if (workingLinks.length > 0) {
+    return { ok: true, text: workingLinks.join("\n") };
   }
 
   // 3) transfer.sh (simple PUT, direct link)
@@ -509,6 +527,11 @@ async function signedInTour(adb, pid) {
   await sleep(12000);
   let xml = dump();
   const handle = `cismoke${String(process.env.GITHUB_RUN_ID || Date.now()).slice(-6)}`;
+  if (!(await tap(xml, "Your name"))) {
+    if (await tap(xml, "Quick start")) {
+      xml = dump();
+    }
+  }
   if (!(await tap(xml, "Your name"))) {
     lines.push(`quick start form not found: ${texts(xml)}`);
     return lines;

@@ -160,7 +160,18 @@ fun MoreHubScreen(navigate: (Any) -> Unit, viewModel: MoreViewModel = hiltViewMo
         add(Tile(R.string.more_settings, AbIcons.Settings, AbColors.TextSecondary, SettingsRoute))
         if (me?.isModerator == true) add(Tile(R.string.more_admin, AbIcons.AdminPanelSettings, AbColors.Rose, AdminRoute))
     }
-    Scaffold(topBar = { AbTopBar(title = stringResource(R.string.more_title)) }) { padding ->
+    Scaffold(
+        topBar = {
+            AbTopBar(
+                title = stringResource(R.string.more_title),
+                actions = {
+                    IconButton(onClick = { navigate(SettingsRoute) }) {
+                        AbIcon(AbIcons.Settings, stringResource(R.string.more_settings), tint = AbColors.Cyan)
+                    }
+                },
+            )
+        },
+    ) { padding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 104.dp),
             modifier = Modifier.fillMaxSize().padding(padding),
