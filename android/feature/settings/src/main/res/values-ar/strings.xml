@@ -107,5 +107,13 @@
     <string name="set_server_ok">الخادم متاح ✔</string>
     <string name="set_server_fail">الخادم غير متاح — تحقق من العنوان</string>
     <string name="set_server_testing">جارٍ الاختبار…</string>
+    <string name="set_server_token">توكن API (اختياري)</string>
+    <string name="set_server_token_saved">تم حفظ التوكن</string>
+    <string name="set_server_ok_no_key">الخادم متاح لكن مفتاح الذكاء الاصطناعي غير مضبوط عليه بعد</string>
+    <string name="set_server_test_agent">اختبار الوكيل الذكي</string>
+    <string name="set_server_agent_testing">جارٍ سؤال الوكيل…</string>
+    <string name="set_server_agent_ok">أجاب الوكيل الذكي ✔</string>
+    <string name="set_server_agent_empty">أجاب الخادم برد فارغ</string>
+    <string name="set_server_agent_failed">فشل اختبار الوكيل — تحقق من العنوان والتوكن</string>
     <string name="set_delete_reauth">الجلسة قديمة، وسيُطلب تسجيل الدخول بجوجل مرة أخرى لتأكيد الحذف.</string>
 </resources>

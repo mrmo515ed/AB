@@ -26,4 +26,9 @@ data class AppSettings(
      * Empty means "use the build-time value" (`-Panimeblack.apiBaseUrl` / `ANIMEBLACK_API_BASEURL`).
      */
     val apiBaseUrlOverride: String = "",
+    /**
+     * Optional API token for the server (`ANIMEBLACK_AGENT_TOKEN`), stored on this device only.
+     * Empty means "use the value baked into the build", if any.
+     */
+    val apiTokenOverride: String = "",
 )

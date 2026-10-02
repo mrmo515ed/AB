@@ -28,6 +28,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
+/** Result of probing a server: is it reachable, and can it actually answer AI questions? */
+data class ServerHealth(val reachable: Boolean, val agentReady: Boolean?)
+
 /**
  * Client for the web server's Gemini search agent (`POST /api/gemini/search-agent`). The Gemini
  * key stays on the server — it is never shipped in the APK.
@@ -55,13 +58,26 @@ class AgentApi @Inject constructor(
 
     suspend fun currentBaseUrl(): String = config.effectiveApiBaseUrl(settings.current().apiBaseUrlOverride)
 
-    /** Cheap reachability probe used by the settings screen (`GET /api/health`). */
-    suspend fun health(url: String? = null): Boolean = withContext(io) {
+    /** Token in effect: the one typed in Settings, otherwise the build-time value. */
+    suspend fun currentToken(): String =
+        settings.current().apiTokenOverride.trim().ifBlank { config.apiToken.trim() }
+
+    /**
+     * Cheap reachability probe used by the settings screen (`GET /api/health`).
+     * [ServerHealth.agentReady] is null for older servers that do not report it.
+     */
+    suspend fun health(url: String? = null): ServerHealth = withContext(io) {
         val target = url?.trim()?.trimEnd('/').takeUnless { it.isNullOrEmpty() } ?: currentBaseUrl()
-        if (!isConfigured(target)) return@withContext false
+        if (!isConfigured(target)) return@withContext ServerHealth(reachable = false, agentReady = null)
         runCatching {
-            client.newCall(Request.Builder().url("$target/api/health").get().build()).execute().use { it.isSuccessful }
-        }.getOrDefault(false)
+            client.newCall(Request.Builder().url("$target/api/health").get().build()).execute().use { response ->
+                if (!response.isSuccessful) return@withContext ServerHealth(reachable = false, agentReady = null)
+                val body = runCatching { json.parseToJsonElement(response.body.string()).jsonObject }.getOrNull()
+                val agent = body?.get("agent") as? JsonObject
+                val ready = agent?.get("configured")?.toString()?.trim('"')?.toBooleanStrictOrNull()
+                ServerHealth(reachable = true, agentReady = ready)
+            }
+        }.getOrDefault(ServerHealth(reachable = false, agentReady = null))
     }
 
     suspend fun ask(prompt: String, mode: String, history: List<Pair<String, String>>): AgentAnswer = withContext(io) {
@@ -82,7 +98,7 @@ class AgentApi @Inject constructor(
         val request = try {
             Request.Builder()
                 .url("$base/api/gemini/search-agent")
-                .apply { if (config.apiToken.isNotBlank()) header("x-ab-token", config.apiToken) }
+                .apply { val token = currentToken(); if (token.isNotBlank()) header("x-ab-token", token) }
                 .post(body)
                 .build()
         } catch (e: IllegalArgumentException) {

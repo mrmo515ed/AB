@@ -8,6 +8,17 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Load a ".env" file sitting next to this script when present (Node 20.12+/21.7+ built-in).
+// Real environment variables always win, so hosting dashboards keep working unchanged.
+try {
+  if (typeof process.loadEnvFile === "function") {
+    const envFile = join(__dirname, ".env");
+    if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+  }
+} catch (err) {
+  console.warn(`Could not load .env: ${err?.message}`);
+}
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -22,6 +33,33 @@ const PORT = Number(process.env.PORT) || 3000;
 const AGENT_TOKEN = (process.env.ANIMEBLACK_AGENT_TOKEN || "").trim();
 const ADMIN_TOKEN = (process.env.ANIMEBLACK_ADMIN_TOKEN || "").trim();
 if (process.env.ANIMEBLACK_TRUST_PROXY === "1") app.set("trust proxy", true);
+
+// ---------------------------------------------------------------------------------
+// Optional CORS for the API. Not needed when this server also serves the web app
+// (same origin). Set it when the web UI is hosted elsewhere (e.g. Firebase Hosting)
+// and only the API runs here:
+//   ANIMEBLACK_ALLOWED_ORIGINS=https://animeblackapp-b6223.web.app,https://example.com
+// Requests without an Origin header (the Android app) are always allowed.
+// ---------------------------------------------------------------------------------
+const ALLOWED_ORIGINS = (process.env.ANIMEBLACK_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+if (ALLOWED_ORIGINS.length > 0) {
+  app.use((req, res, next) => {
+    const origin = req.get("Origin");
+    if (origin && ALLOWED_ORIGINS.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type,x-ab-token");
+      res.setHeader("Access-Control-Max-Age", "86400");
+    }
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
+}
 
 function requestToken(req) {
   return String(req.get("x-ab-token") || req.query.token || "").trim();
@@ -92,7 +130,9 @@ function getAI() {
   return aiClient;
 }
 
-// System Health and Performance Metrics Endpoint
+// System Health and Performance Metrics Endpoint.
+// `agent` tells the Android app whether this server can actually answer AI questions, so
+// Settings → AI server can report "reachable but no model key" instead of a vague success.
 app.get("/api/health", (req, res) => {
   const mem = process.memoryUsage();
   res.json({
@@ -106,6 +146,11 @@ app.get("/api/health", (req, res) => {
       heapTotal: Math.round(mem.heapTotal / 1024 / 1024) + " MB",
     },
     capabilities: ["googleSearch", "gemini-3.8-flash", "realtime-grounding"],
+    agent: {
+      configured: Boolean((process.env.GEMINI_API_KEY || "").trim()),
+      tokenRequired: Boolean(AGENT_TOKEN),
+      rateLimitPerMinute: Number(process.env.ANIMEBLACK_AGENT_RPM) || 20,
+    },
   });
 });
 

@@ -64,6 +64,7 @@ class SettingsDataSource @Inject constructor(
         val deviceId = stringPreferencesKey("device_id")
         val sessionId = stringPreferencesKey("session_id")
         val apiBaseUrl = stringPreferencesKey("api_base_url")
+        val apiToken = stringPreferencesKey("api_token")
     }
 
     private val safeData: Flow<Preferences> = store.data.catch { e ->
@@ -93,6 +94,7 @@ class SettingsDataSource @Inject constructor(
         archivedChats = this[Keys.archivedChats] ?: emptySet(),
         hiddenPosts = this[Keys.hiddenPosts] ?: emptySet(),
         apiBaseUrlOverride = this[Keys.apiBaseUrl].orEmpty(),
+        apiTokenOverride = this[Keys.apiToken].orEmpty(),
     )
 
     suspend fun current(): AppSettings = settings.first()
@@ -121,6 +123,7 @@ class SettingsDataSource @Inject constructor(
             p[Keys.archivedChats] = next.archivedChats
             p[Keys.hiddenPosts] = next.hiddenPosts
             p[Keys.apiBaseUrl] = next.apiBaseUrlOverride.trim()
+            p[Keys.apiToken] = next.apiTokenOverride.trim()
         }
     }
 

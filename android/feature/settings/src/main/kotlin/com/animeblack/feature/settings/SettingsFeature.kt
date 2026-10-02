@@ -57,6 +57,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.animeblack.core.common.config.AppConfig
 import com.animeblack.core.common.result.AppResult
+import com.animeblack.core.data.firebase.AppErrorException
 import com.animeblack.core.data.remote.AgentApi
 import com.animeblack.core.data.repository.AuthRepository
 import com.animeblack.core.data.repository.SessionRepository
@@ -210,7 +211,18 @@ class SettingsViewModel @Inject constructor(
         .map { it.apiBaseUrlOverride }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    /** The raw in-app API token (empty = the build-time value is used). */
+    val serverToken: StateFlow<String> = settings.settings
+        .map { it.apiTokenOverride }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
     val serverTesting = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val agentTesting = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun saveServerToken(token: String) = viewModelScope.launch {
+        settings.update { it.copy(apiTokenOverride = token.trim()) }
+        _messages.tryEmit(R.string.set_server_token_saved)
+    }
 
     fun saveServerUrl(url: String) = viewModelScope.launch {
         val clean = url.trim().trimEnd('/')
@@ -225,9 +237,31 @@ class SettingsViewModel @Inject constructor(
     fun testServerUrl(url: String) = viewModelScope.launch {
         serverTesting.value = true
         val clean = url.trim().trimEnd('/')
-        val reachable = agent.health(clean)
+        val health = agent.health(clean)
         serverTesting.value = false
-        _messages.tryEmit(if (reachable) R.string.set_server_ok else R.string.set_server_fail)
+        _messages.tryEmit(
+            when {
+                !health.reachable -> R.string.set_server_fail
+                health.agentReady == false -> R.string.set_server_ok_no_key
+                else -> R.string.set_server_ok
+            },
+        )
+    }
+
+    /** Sends one real question to the server so the whole agent path can be verified in-app. */
+    fun testAgent(url: String) = viewModelScope.launch {
+        agentTesting.value = true
+        val clean = url.trim().trimEnd('/')
+        val message = try {
+            val answer = agent.ask("ما هو أنمي One Piece؟", "general", emptyList())
+            if (answer.answer.isBlank()) R.string.set_server_agent_empty else R.string.set_server_agent_ok
+        } catch (e: AppErrorException) {
+            e.error.messageRes()
+        } catch (_: Exception) {
+            R.string.set_server_agent_failed
+        }
+        agentTesting.value = false
+        _messages.tryEmit(message)
     }
 }
 
@@ -609,8 +643,12 @@ fun ServerConfigScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltVi
     val override by viewModel.serverOverride.collectAsStateWithLifecycle()
     val effective by viewModel.serverBaseUrl.collectAsStateWithLifecycle()
     val testing by viewModel.serverTesting.collectAsStateWithLifecycle()
+    val agentTesting by viewModel.agentTesting.collectAsStateWithLifecycle()
+    val savedToken by viewModel.serverToken.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf("") }
     LaunchedEffect(override) { input = override }
+    LaunchedEffect(savedToken) { token = savedToken }
 
     Scaffold(topBar = { AbTopBar(title = stringResource(R.string.set_server_title), onBack = onBack) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -631,11 +669,31 @@ fun ServerConfigScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltVi
                 modifier = Modifier.fillMaxWidth(),
             )
             GradientButton(stringResource(R.string.set_server_save), onClick = { viewModel.saveServerUrl(input) }, icon = AbIcons.Check, modifier = Modifier.fillMaxWidth())
+            AbTextField(
+                value = token,
+                onValueChange = { token = it.take(200) },
+                label = stringResource(R.string.set_server_token),
+                leadingIcon = AbIcons.Key,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            GlassButton(
+                text = stringResource(R.string.set_server_save),
+                onClick = { viewModel.saveServerToken(token) },
+                icon = AbIcons.Lock,
+                modifier = Modifier.fillMaxWidth(),
+            )
             GlassButton(
                 text = if (testing) stringResource(R.string.set_server_testing) else stringResource(R.string.set_server_test),
                 onClick = { viewModel.testServerUrl(input) },
                 icon = AbIcons.WifiOff,
                 enabled = !testing,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            GlassButton(
+                text = if (agentTesting) stringResource(R.string.set_server_agent_testing) else stringResource(R.string.set_server_test_agent),
+                onClick = { viewModel.testAgent(input) },
+                icon = AbIcons.AutoAwesome,
+                enabled = !agentTesting,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (override.isNotBlank()) {

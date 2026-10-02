@@ -107,5 +107,13 @@
     <string name="set_server_ok">Server reachable ✔</string>
     <string name="set_server_fail">Server not reachable — check the address</string>
     <string name="set_server_testing">Testing…</string>
+    <string name="set_server_token">API token (optional)</string>
+    <string name="set_server_token_saved">API token saved</string>
+    <string name="set_server_ok_no_key">Server reachable, but its AI key is not set yet</string>
+    <string name="set_server_test_agent">Test the AI agent</string>
+    <string name="set_server_agent_testing">Asking the agent…</string>
+    <string name="set_server_agent_ok">The AI agent answered ✔</string>
+    <string name="set_server_agent_empty">The server answered with an empty reply</string>
+    <string name="set_server_agent_failed">The agent test failed — check the address and the token</string>
     <string name="set_delete_reauth">The session is old, so Google sign-in will be requested again to confirm deletion.</string>
 </resources>

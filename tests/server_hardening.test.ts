@@ -40,7 +40,7 @@ beforeAll(async () => {
       ANIMEBLACK_AGENT_TOKEN: AGENT_TOKEN,
       ANIMEBLACK_ADMIN_TOKEN: ADMIN_TOKEN,
       ANIMEBLACK_AGENT_RPM: String(RPM),
-      GEMINI_API_KEY: "",
+      GEMINI_API_KEY: "test-key-not-real",
     },
     stdio: "ignore",
   });
@@ -66,6 +66,15 @@ describe("Server hardening (tokens, limits, rate limiting)", () => {
     expect(r.status).toBe(200);
     const json = (await r.json()) as { status?: string };
     expect(json.status).toBe("healthy");
+  });
+
+  it("reports whether the AI agent is configured (used by the app's server screen)", async () => {
+    const json = (await (await fetch(`${BASE}/api/health`)).json()) as {
+      agent?: { configured?: boolean; tokenRequired?: boolean; rateLimitPerMinute?: number };
+    };
+    expect(json.agent?.configured).toBe(true);
+    expect(json.agent?.tokenRequired).toBe(true);
+    expect(json.agent?.rateLimitPerMinute).toBe(RPM);
   });
 
   it("rejects the search agent without a token", async () => {
