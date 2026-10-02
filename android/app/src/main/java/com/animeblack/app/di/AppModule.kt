@@ -23,6 +23,7 @@ object AppModule {
         versionName = BuildConfig.VERSION_NAME,
         versionCode = BuildConfig.VERSION_CODE,
         hasAndroidFirebaseApp = true, // google-services.json is mandatory: the build fails without it
+        hasAndroidOauthClient = BuildConfig.HAS_ANDROID_OAUTH_CLIENT,
         notificationIconRes = R.drawable.ic_stat_notification,
     )
 }

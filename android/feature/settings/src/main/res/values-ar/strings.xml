@@ -89,6 +89,10 @@
     <string name="set_guest_password">كلمة المرور (6 أحرف أو أكثر)</string>
     <string name="set_guest_save">حفظ الحساب</string>
     <string name="set_server">خادم الذكاء الاصطناعي</string>
+    <string name="set_google_signin">تسجيل الدخول بجوجل</string>
+    <string name="set_google_ready">جاهز ✔</string>
+    <string name="set_google_sha_missing">يحتاج تسجيل بصمة SHA-1 في Firebase</string>
+    <string name="set_google_hint">يعمل تسجيل الدخول بجوجل بعد تسجيل بصمة SHA-1 لهذا التطبيق في Firebase (Project settings ← Your apps ← Add fingerprint) ثم تنزيل google-services.json من جديد.</string>
     <string name="set_server_title">خادم الذكاء الاصطناعي (وكيل البحث)</string>
     <string name="set_server_hint">https://your-server.example.com</string>
     <string name="set_server_body">عنوان خادم Anime Black الذي يشغّل وكيل البحث الذكي. يُحفظ على هذا الجهاز فقط؛ اتركه فارغًا لاستخدام العنوان المدمج في هذا الإصدار.</string>

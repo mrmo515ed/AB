@@ -89,6 +89,10 @@
     <string name="set_guest_password">Password (6+ characters)</string>
     <string name="set_guest_save">Save account</string>
     <string name="set_server">AI server</string>
+    <string name="set_google_signin">Google sign-in</string>
+    <string name="set_google_ready">Ready ✔</string>
+    <string name="set_google_sha_missing">Needs the app SHA-1 in Firebase</string>
+    <string name="set_google_hint">Google sign-in works after a SHA-1 fingerprint is registered for this app in the Firebase console (Project settings → Your apps → Add fingerprint), then google-services.json is downloaded again.</string>
     <string name="set_server_title">AI server (search agent)</string>
     <string name="set_server_hint">https://your-server.example.com</string>
     <string name="set_server_body">Address of the Anime Black server that powers the AI search agent. It is stored on this device only; leave it empty to use the address built into this version.</string>

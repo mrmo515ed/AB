@@ -19,6 +19,11 @@ data class AppConfig(
     val versionCode: Int,
     /** True when a real google-services.json (registered Android app) was used for the build. */
     val hasAndroidFirebaseApp: Boolean,
+    /**
+     * True when google-services.json contains an Android OAuth client (`client_type` 1), meaning a
+     * SHA-1 fingerprint is registered for this signing key. Google Sign-In cannot work without it.
+     */
+    val hasAndroidOauthClient: Boolean = true,
     /** Status-bar icon for locally displayed notifications. */
     val notificationIconRes: Int = 0,
 ) {

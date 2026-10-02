@@ -571,6 +571,20 @@ fun SyncDiagnosticsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hil
                     if (viewModel.config.isUsableServerUrl(serverUrl)) AbColors.Emerald else AbColors.TextSecondary,
                 )
                 HorizontalDivider(color = AbColors.Line2)
+                StatusRow(
+                    stringResource(R.string.set_google_signin),
+                    stringResource(if (viewModel.config.hasAndroidOauthClient) R.string.set_google_ready else R.string.set_google_sha_missing),
+                    if (viewModel.config.hasAndroidOauthClient) AbColors.Emerald else AbColors.Orange,
+                )
+                if (!viewModel.config.hasAndroidOauthClient) {
+                    Text(
+                        stringResource(R.string.set_google_hint),
+                        color = AbColors.TextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                HorizontalDivider(color = AbColors.Line2)
                 StatusRow(stringResource(R.string.set_online), stringResource(if (st.online) R.string.set_connected else R.string.set_offline), if (st.online) AbColors.Emerald else AbColors.Rose)
                 HorizontalDivider(color = AbColors.Line2)
                 StatusRow(stringResource(R.string.set_backend), stringResource(if (st.backendReachable) R.string.set_reachable else R.string.set_unreachable), if (st.backendReachable) AbColors.Emerald else AbColors.Orange)

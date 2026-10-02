@@ -26,17 +26,29 @@ val googleServices = JsonSlurper().parse(googleServicesFile) as Map<String, Any?
 
 /** Web OAuth client (`client_type` 3) of the Firebase project: `serverClientId` for Google Sign-In. */
 @Suppress("UNCHECKED_CAST")
-fun googleWebClientId(packageName: String): String {
-    val clients = googleServices["client"] as? List<Map<String, Any?>> ?: return ""
+fun googleOauthClients(packageName: String): List<Map<String, Any?>> {
+    val clients = googleServices["client"] as? List<Map<String, Any?>> ?: return emptyList()
     val client = clients.firstOrNull { c ->
         val info = c["client_info"] as? Map<String, Any?>
         (info?.get("android_client_info") as? Map<String, Any?>)?.get("package_name") == packageName
-    } ?: return ""
+    } ?: return emptyList()
     val oauth = client["oauth_client"] as? List<Map<String, Any?>> ?: emptyList()
     val appInvite = (client["services"] as? Map<String, Any?>)?.get("appinvite_service") as? Map<String, Any?>
     val others = appInvite?.get("other_platform_oauth_client") as? List<Map<String, Any?>> ?: emptyList()
-    return (oauth + others).firstOrNull { (it["client_type"] as? Number)?.toInt() == 3 }?.get("client_id")?.toString().orEmpty()
+    return oauth + others
 }
+
+@Suppress("UNCHECKED_CAST")
+fun googleWebClientId(packageName: String): String =
+    googleOauthClients(packageName).firstOrNull { (it["client_type"] as? Number)?.toInt() == 3 }?.get("client_id")?.toString().orEmpty()
+
+/**
+ * True when the project has an **Android** OAuth client (`client_type` 1) for this package, i.e. a
+ * SHA-1 fingerprint is registered in the Firebase console. Without it Google Sign-In fails with
+ * "Developer console" (28444); the diagnostics screen shows this so the owner never has to guess.
+ */
+fun hasAndroidOauthClient(packageName: String): Boolean =
+    googleOauthClients(packageName).any { (it["client_type"] as? Number)?.toInt() == 1 }
 
 /** R8 mapping upload needs Crashlytics enabled in the console; opt in with -Panimeblack.crashlyticsMappingUpload=true. */
 val crashlyticsMappingUpload = providers.gradleProperty("animeblack.crashlyticsMappingUpload").orNull == "true"
@@ -62,6 +74,7 @@ android {
         // The new project uses the (default) Firestore database (Native mode).
         buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"${providers.gradleProperty("animeblack.firestoreDatabaseId").orNull ?: "(default)"}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${providers.gradleProperty("animeblack.googleWebClientId").orNull ?: googleWebClientId("com.animeblack.app")}\"")
+        buildConfigField("boolean", "HAS_ANDROID_OAUTH_CLIENT", "${hasAndroidOauthClient("com.animeblack.app")}")
         buildConfigField("String", "API_BASE_URL", "\"${secret("animeblack.apiBaseUrl").orEmpty()}\"")
         buildConfigField("String", "API_TOKEN", "\"${secret("animeblack.apiToken").orEmpty()}\"")
     }
