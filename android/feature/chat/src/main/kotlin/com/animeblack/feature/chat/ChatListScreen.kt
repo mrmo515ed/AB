@@ -61,6 +61,7 @@ data class ChatListActions(
     val openChat: (chatId: String, partnerId: String) -> Unit,
     val newChat: () -> Unit,
     val openRequests: () -> Unit,
+    val openGroup: (String) -> Unit = {},
 )
 
 @Composable
@@ -68,6 +69,7 @@ fun ChatListScreen(actions: ChatListActions, viewModel: ChatListViewModel = hilt
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val showArchived by viewModel.showArchived.collectAsStateWithLifecycle()
+    val myGroups by viewModel.myGroups.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var menuFor by remember { mutableStateOf<ConversationItem?>(null) }
@@ -152,6 +154,46 @@ fun ChatListScreen(actions: ChatListActions, viewModel: ChatListViewModel = hilt
                     onAction = actions.newChat,
                 )
                 else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                    // My Groups strip (web chat page: مجموعاتي قروبات)
+                    if (!showArchived && myGroups.isNotEmpty()) {
+                        item(key = "groups_strip") {
+                            Column(Modifier.padding(top = 4.dp)) {
+                                Text(
+                                    stringResource(R.string.chat_my_groups),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AbColors.TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    items(myGroups, key = { "grp_" + it.id }) { group ->
+                                        Row(
+                                            Modifier
+                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                                .background(AbColors.Charcoal3)
+                                                .clickable { actions.openGroup(group.id) }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            AbIcon(AbIcons.Groups, null, tint = AbColors.Cyan, size = 18.dp)
+                                            Spacer(Modifier.width(7.dp))
+                                            Column {
+                                                Text(group.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(
+                                                    "${group.memberUids.size.coerceAtLeast(group.members.size)} أعضاء" + if (group.announceOnly) " · إعلانات" else "",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = AbColors.TextMuted,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Online Friends Strip
                     if (!showArchived && onlinePartners.isNotEmpty()) {
                         item(key = "online_strip") {

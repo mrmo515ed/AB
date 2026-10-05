@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.animeblack.core.datastore.security.CryptoStore
 import com.animeblack.core.model.SavedAccount
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
@@ -61,6 +62,7 @@ class SettingsDataSource @Inject constructor(
         val savedAccounts = stringPreferencesKey("saved_accounts")
         val chatDrafts = stringPreferencesKey("chat_drafts")
         val postDraft = stringPreferencesKey("post_draft")
+        val starredMessages = stringSetPreferencesKey("starred_messages")
         val deviceId = stringPreferencesKey("device_id")
         val sessionId = stringPreferencesKey("session_id")
         val apiBaseUrl = stringPreferencesKey("api_base_url")
@@ -94,7 +96,8 @@ class SettingsDataSource @Inject constructor(
         archivedChats = this[Keys.archivedChats] ?: emptySet(),
         hiddenPosts = this[Keys.hiddenPosts] ?: emptySet(),
         apiBaseUrlOverride = this[Keys.apiBaseUrl].orEmpty(),
-        apiTokenOverride = this[Keys.apiToken].orEmpty(),
+        // Server API tokens are stored Keystore-encrypted (legacy plaintext migrates on read).
+        apiTokenOverride = this[Keys.apiToken]?.let { CryptoStore.decryptOrPlain(it) }.orEmpty(),
     )
 
     suspend fun current(): AppSettings = settings.first()
@@ -123,7 +126,8 @@ class SettingsDataSource @Inject constructor(
             p[Keys.archivedChats] = next.archivedChats
             p[Keys.hiddenPosts] = next.hiddenPosts
             p[Keys.apiBaseUrl] = next.apiBaseUrlOverride.trim()
-            p[Keys.apiToken] = next.apiTokenOverride.trim()
+            val token = next.apiTokenOverride.trim()
+            p[Keys.apiToken] = if (token.isEmpty()) token else CryptoStore.encrypt(token)
         }
     }
 
@@ -148,7 +152,7 @@ class SettingsDataSource @Inject constructor(
         if (raw.isNullOrBlank()) {
             emptyList()
         } else {
-            json.decodeFromString(accountsSerializer, raw).map {
+            json.decodeFromString(accountsSerializer, CryptoStore.decryptOrPlain(raw)).map {
                 SavedAccount(it.uid, it.name, it.email, it.avatar, it.provider, it.lastUsedAt)
             }
         }
@@ -156,23 +160,24 @@ class SettingsDataSource @Inject constructor(
         emptyList()
     }
 
+    private fun encodeAccounts(list: List<SavedAccount>): String = CryptoStore.encrypt(
+        json.encodeToString(
+            accountsSerializer,
+            list.map { SavedAccountDto(it.uid, it.name, it.email, it.avatar, it.provider, it.lastUsedAt) },
+        ),
+    )
+
     suspend fun upsertSavedAccount(account: SavedAccount) {
         store.edit { p ->
             val list = decodeAccounts(p[Keys.savedAccounts]).filterNot { it.uid == account.uid } + account
-            p[Keys.savedAccounts] = json.encodeToString(
-                accountsSerializer,
-                list.takeLast(MAX_SAVED_ACCOUNTS).map { SavedAccountDto(it.uid, it.name, it.email, it.avatar, it.provider, it.lastUsedAt) },
-            )
+            p[Keys.savedAccounts] = encodeAccounts(list.takeLast(MAX_SAVED_ACCOUNTS))
         }
     }
 
     suspend fun removeSavedAccount(uid: String) {
         store.edit { p ->
             val list = decodeAccounts(p[Keys.savedAccounts]).filterNot { it.uid == uid }
-            p[Keys.savedAccounts] = json.encodeToString(
-                accountsSerializer,
-                list.map { SavedAccountDto(it.uid, it.name, it.email, it.avatar, it.provider, it.lastUsedAt) },
-            )
+            p[Keys.savedAccounts] = encodeAccounts(list)
         }
     }
 
@@ -181,7 +186,7 @@ class SettingsDataSource @Inject constructor(
 
     val chatDrafts: Flow<Map<String, String>> = safeData.map { p ->
         try {
-            p[Keys.chatDrafts]?.let { json.decodeFromString(draftsSerializer, it) } ?: emptyMap()
+            p[Keys.chatDrafts]?.let { json.decodeFromString(draftsSerializer, CryptoStore.decryptOrPlain(it)) } ?: emptyMap()
         } catch (_: Exception) {
             emptyMap()
         }
@@ -190,12 +195,12 @@ class SettingsDataSource @Inject constructor(
     suspend fun setChatDraft(chatId: String, text: String) {
         store.edit { p ->
             val cur = try {
-                p[Keys.chatDrafts]?.let { json.decodeFromString(draftsSerializer, it) } ?: emptyMap()
+                p[Keys.chatDrafts]?.let { json.decodeFromString(draftsSerializer, CryptoStore.decryptOrPlain(it)) } ?: emptyMap()
             } catch (_: Exception) {
                 emptyMap()
             }
             val next = if (text.isBlank()) cur - chatId else cur + (chatId to text.take(4000))
-            p[Keys.chatDrafts] = json.encodeToString(draftsSerializer, next)
+            p[Keys.chatDrafts] = CryptoStore.encrypt(json.encodeToString(draftsSerializer, next))
         }
     }
 
@@ -205,19 +210,43 @@ class SettingsDataSource @Inject constructor(
         store.edit { it[Keys.postDraft] = text.take(10_000) }
     }
 
+    // ------------------------------------------------------------------ starred messages (web `star`)
+    private fun starKey(chatId: String, messageId: String) = "$chatId:$messageId"
+
+    val starredMessages: Flow<Set<String>> = safeData.map { it[Keys.starredMessages] ?: emptySet() }
+
+    fun starredIn(chatId: String): Flow<Set<String>> = starredMessages.map { all ->
+        all.filter { it.startsWith("$chatId:") }.mapTo(mutableSetOf()) { it.substringAfter(':') }
+    }
+
+    suspend fun toggleStar(chatId: String, messageId: String): Boolean {
+        var nowStarred = false
+        store.edit { p ->
+            val cur = p[Keys.starredMessages] ?: emptySet()
+            val key = starKey(chatId, messageId)
+            nowStarred = key !in cur
+            p[Keys.starredMessages] = if (key in cur) cur - key else cur + key
+        }
+        return nowStarred
+    }
+
     // ------------------------------------------------------------------ device identity
     suspend fun deviceId(): String {
         val existing = safeData.first()[Keys.deviceId]
-        if (!existing.isNullOrBlank()) return existing
+        if (!existing.isNullOrBlank()) {
+            val plain = CryptoStore.decryptOrPlain(existing)
+            if (plain != existing) store.edit { it[Keys.deviceId] = CryptoStore.encrypt(plain) }
+            return plain
+        }
         val created = "dev_" + UUID.randomUUID().toString().replace("-", "").take(20)
-        store.edit { it[Keys.deviceId] = created }
+        store.edit { it[Keys.deviceId] = CryptoStore.encrypt(created) }
         return created
     }
 
-    suspend fun sessionId(): String? = safeData.first()[Keys.sessionId]
+    suspend fun sessionId(): String? = safeData.first()[Keys.sessionId]?.let { CryptoStore.decryptOrPlain(it) }
 
     suspend fun setSessionId(id: String?) {
-        store.edit { p -> if (id == null) p.remove(Keys.sessionId) else p[Keys.sessionId] = id }
+        store.edit { p -> if (id == null) p.remove(Keys.sessionId) else p[Keys.sessionId] = CryptoStore.encrypt(id) }
     }
 
     private companion object {

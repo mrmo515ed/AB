@@ -101,6 +101,7 @@ fun ChatRoomScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val composer by viewModel.composer.collectAsStateWithLifecycle()
+    val forwardTargets by viewModel.forwardTargets.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
@@ -109,6 +110,13 @@ fun ChatRoomScreen(
     var confirmDelete by remember { mutableStateOf<ChatMessage?>(null) }
     var imageViewer by remember { mutableStateOf<String?>(null) }
     var highlightId by remember { mutableStateOf<String?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+    var forwardFor by remember { mutableStateOf<ChatMessage?>(null) }
+    var forwardSelection by remember { mutableStateOf(false) }
+    var infoFor by remember { mutableStateOf<ChatMessage?>(null) }
+    var showStats by remember { mutableStateOf(false) }
+    var showStarred by remember { mutableStateOf(false) }
+    var confirmDeleteBoth by remember { mutableStateOf(false) }
 
     // Foreground tracking: suppress notifications for this chat and keep receipts current.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -142,6 +150,18 @@ fun ChatRoomScreen(
         if (uri != null) viewModel.addAttachments(listOf(localMediaFor(context, uri)))
     }
 
+    fun jumpToMessage(id: String) {
+        val index = state.items.indexOfFirst { it is ChatListItem.Message && it.message.id == id }
+        if (index >= 0) {
+            scope.launch {
+                listState.animateScrollToItem(index)
+                highlightId = id
+                delay(1_600)
+                highlightId = null
+            }
+        }
+    }
+
     val nearOldest by remember {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -158,7 +178,35 @@ fun ChatRoomScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            Column {
+                if (state.selectMode) {
+                    Row(
+                        Modifier.fillMaxWidth().background(AbColors.Charcoal).padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AbIconButton(AbIcons.Close, stringResource(com.animeblack.core.designsystem.R.string.ab_cancel), onClick = viewModel::exitSelection)
+                        Text(
+                            stringResource(R.string.chat_select_count, state.selectedIds.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f).padding(start = 8.dp),
+                        )
+                        AbIconButton(AbIcons.CheckCircle, stringResource(R.string.chat_select_all), onClick = viewModel::selectAll)
+                        AbIconButton(
+                            AbIcons.Forward,
+                            stringResource(R.string.chat_forward_title),
+                            onClick = { forwardSelection = true },
+                            enabled = state.selectedIds.isNotEmpty(),
+                        )
+                        AbIconButton(
+                            AbIcons.Delete,
+                            stringResource(com.animeblack.core.ui.R.string.ui_chat_delete_for_me),
+                            tint = AbColors.Rose,
+                            onClick = { viewModel.deleteSelected() },
+                            enabled = state.selectedIds.isNotEmpty(),
+                        )
+                    }
+                } else {
+                    TopAppBar(
                 navigationIcon = { AbIconButton(AbIcons.ArrowBack, stringResource(com.animeblack.core.designsystem.R.string.ab_back), onClick = actions.onBack) },
                 title = {
                     Row(
@@ -191,11 +239,52 @@ fun ChatRoomScreen(
                     if (state.partnerId.isNotBlank()) {
                         AbIconButton(AbIcons.Info, stringResource(R.string.chat_info), onClick = { actions.openInfo(state.chatId, state.partnerId) })
                     }
+                    AbIconButton(AbIcons.MoreVert, "خيارات المحادثة", onClick = { showMenu = true })
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AbColors.Charcoal),
-            )
+                    )
+                }
+                // Pinned message banner (web `pinnedMsgs`).
+                state.pinnedMessage?.let { pinned ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(AbColors.Gold.copy(alpha = 0.12f))
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AbIcon(AbIcons.PushPinFilled, null, tint = AbColors.Gold, size = 16.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.chat_pinned_label) + ": " + (pinned.text.ifBlank { "وسائط" }).take(60),
+                            color = AbColors.TextPrimary,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).clickable { jumpToMessage(pinned.id) },
+                        )
+                        AbIconButton(AbIcons.Close, stringResource(R.string.chat_msg_unpinned), tint = AbColors.TextSecondary, onClick = { viewModel.unpinMessage(pinned.id) })
+                    }
+                }
+                // Disappearing messages banner (web `vanish`).
+                if (state.vanishHours > 0) {
+                    Row(
+                        Modifier.fillMaxWidth().background(AbColors.Emerald.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        AbIcon(AbIcons.Timer, null, tint = AbColors.Emerald, size = 14.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            stringResource(if (state.vanishHours == 24) R.string.chat_vanish_banner_24 else R.string.chat_vanish_banner_72),
+                            color = AbColors.Emerald,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+            }
         },
         bottomBar = {
+          if (!state.selectMode) {
             Column {
                 val notice = when {
                     state.blockedByMe -> R.string.chat_blocked
@@ -232,6 +321,7 @@ fun ChatRoomScreen(
                     modifier = Modifier.navigationBarsPadding().imePadding(),
                 )
             }
+          }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = AbColors.Black,
@@ -275,20 +365,24 @@ fun ChatRoomScreen(
                                     },
                                     onOpenUser = actions.openProfile,
                                     onRetry = viewModel::retry,
-                                    onQuoteClick = { id ->
-                                        val index = state.items.indexOfFirst { it is ChatListItem.Message && it.message.id == id }
-                                        if (index >= 0) {
-                                            scope.launch {
-                                                listState.animateScrollToItem(index)
-                                                highlightId = id
-                                                delay(1_500)
-                                                highlightId = null
-                                            }
-                                        }
-                                    },
+                                    onQuoteClick = { id -> jumpToMessage(id) },
                                     onReactionClick = { key -> viewModel.toggleReaction(m, key) },
                                     onMention = actions.openMention,
                                     onUrl = { context.openExternalUrl(it) },
+                                    starred = m.id in state.starredIds,
+                                    selectMode = state.selectMode,
+                                    selected = m.id in state.selectedIds,
+                                    onSelect = { viewModel.toggleSelected(m.id) },
+                                    onDoubleTap = if (!state.selectMode && state.canSend && !m.isDeleted && !m.isPending) {
+                                        { viewModel.doubleTapReact(m) }
+                                    } else {
+                                        null
+                                    },
+                                    onSwipeReply = if (!state.selectMode && state.canSend && !state.sendsRequest) {
+                                        { viewModel.reply(m) }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                         }
@@ -330,6 +424,13 @@ fun ChatRoomScreen(
             onDeleteForEveryone = if (mine && canAct) ({ confirmDelete = m }) else null,
             onReport = if (!mine && !m.isDeleted) ({ actions.report("message", "${state.chatId}/${m.id}") }) else null,
             onRetry = if (mine && m.status == MessageStatus.Failed) ({ viewModel.retry() }) else null,
+            onPin = if (canAct && state.canSend) ({ viewModel.pinMessage(m) }) else null,
+            pinned = m.id in state.pinnedMsgIds,
+            onStar = if (canAct) ({ viewModel.toggleStar(m) }) else null,
+            starred = m.id in state.starredIds,
+            onForward = if (canAct) ({ forwardFor = m }) else null,
+            onInfo = { infoFor = m },
+            onSelect = { viewModel.startSelection(m) },
         )
     }
     confirmDelete?.let { m ->
@@ -345,6 +446,89 @@ fun ChatRoomScreen(
         )
     }
     imageViewer?.let { url -> ZoomableImageDialog(url) { imageViewer = null } }
+
+    if (showMenu) {
+        ChatMenuSheet(
+            partnerName = partnerName,
+            partnerAvatar = partner?.avatar,
+            vanishHours = state.vanishHours,
+            starredCount = state.starredIds.size,
+            onDismiss = { showMenu = false },
+            onProfile = { if (state.partnerId.isNotBlank()) actions.openProfile(state.partnerId) },
+            onVoiceCall = { scope.launch { snackbar.showSnackbar(context.getString(R.string.chat_calls_soon)) } },
+            onVideoCall = { scope.launch { snackbar.showSnackbar(context.getString(R.string.chat_calls_soon)) } },
+            onOpenSettings = { actions.openInfo(state.chatId, state.partnerId) },
+            onSharedMedia = { actions.openInfo(state.chatId, state.partnerId) },
+            onStarred = { showStarred = true },
+            onStats = { showStats = true },
+            onCycleVanish = viewModel::cycleVanish,
+            onSelectMode = { viewModel.startSelection() },
+            onDeleteBoth = { confirmDeleteBoth = true },
+        )
+    }
+    forwardFor?.let { m ->
+        ForwardSheet(
+            targets = forwardTargets,
+            onDismiss = { forwardFor = null },
+            onPick = { target ->
+                viewModel.forwardMessage(m, target)
+                forwardFor = null
+            },
+        )
+    }
+    if (forwardSelection) {
+        ForwardSheet(
+            targets = forwardTargets,
+            onDismiss = { forwardSelection = false },
+            onPick = { target ->
+                viewModel.forwardSelected(target)
+                forwardSelection = false
+            },
+        )
+    }
+    infoFor?.let { m ->
+        MessageInfoDialog(
+            message = m,
+            myUid = state.myUid,
+            partnerName = partnerName,
+            onDismiss = { infoFor = null },
+        )
+    }
+    if (showStats) {
+        val firstAt = state.items.mapNotNull { (it as? ChatListItem.Message)?.message?.at?.takeIf { ts -> ts > 0 } }.minOrNull() ?: 0L
+        ChatStatsDialog(
+            partnerName = partnerName,
+            totalMessages = state.totalMessages,
+            myMessages = state.myMessagesCount,
+            mediaCount = state.mediaCount,
+            starredCount = state.starredIds.size,
+            pinnedCount = state.pinnedMsgIds.size,
+            firstAt = firstAt,
+            onDismiss = { showStats = false },
+        )
+    }
+    if (showStarred) {
+        val starredMessages = state.items.mapNotNull { (it as? ChatListItem.Message)?.message }
+            .filter { it.id in state.starredIds && !it.isDeleted }
+        StarredMessagesSheet(
+            messages = starredMessages,
+            myUid = state.myUid,
+            onDismiss = { showStarred = false },
+            onJump = { id -> jumpToMessage(id) },
+        )
+    }
+    if (confirmDeleteBoth) {
+        ConfirmDialog(
+            title = stringResource(R.string.chat_menu_delete_both),
+            message = stringResource(R.string.chat_delete_confirm),
+            onConfirm = {
+                confirmDeleteBoth = false
+                viewModel.deleteChat { actions.onBack() }
+            },
+            onDismiss = { confirmDeleteBoth = false },
+            destructive = true,
+        )
+    }
 }
 
 /** Wallpaper presets (keys stored in `chats/{id}.wallpaper`); URLs are drawn as images. */

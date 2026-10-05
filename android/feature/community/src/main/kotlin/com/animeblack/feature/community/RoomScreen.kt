@@ -283,6 +283,17 @@ fun RoomScreen(
                                     },
                                     onMention = actions.openMention,
                                     onUrl = { context.openExternalUrl(it) },
+                                    onReactionClick = { key -> viewModel.toggleReaction(m, key) },
+                                    onDoubleTap = if (state.canSend && !m.isDeleted && !m.isPending) {
+                                        { viewModel.doubleTapReact(m) }
+                                    } else {
+                                        null
+                                    },
+                                    onSwipeReply = if (state.canSend) {
+                                        { viewModel.reply(m) }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                         }
@@ -320,9 +331,9 @@ fun RoomScreen(
         val mine = m.isMine(state.myUid)
         MessageActionsSheet(
             message = m,
-            myReaction = null,
+            myReaction = m.reactions[state.myUid],
             onDismiss = { actionFor = null },
-            onReact = null,
+            onReact = if (state.canSend && !m.isDeleted && !m.isPending) ({ key -> viewModel.react(m, key) }) else null,
             onReply = if (state.canSend && !m.isDeleted) ({ viewModel.reply(m) }) else null,
             onCopy = if (m.text.isNotBlank()) ({
                 copyToClipboard(context, m.text)

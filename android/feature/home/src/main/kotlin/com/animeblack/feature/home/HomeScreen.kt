@@ -117,6 +117,7 @@ data class HomeNavigator(
     val openMention: (String) -> Unit,
     val openReels: () -> Unit = {},
     val openCommunity: () -> Unit = {},
+    val openCreateGroup: () -> Unit = {},
     val openAnime: () -> Unit = {},
     val openGames: () -> Unit = {},
     val openEconomy: () -> Unit = {},
@@ -605,6 +606,8 @@ private fun QuickCreationStrip(navigator: HomeNavigator) {
         GlowChip(text = "+ منشور", icon = AbIcons.Edit, accentColor = AbColors.Cyan, onClick = { navigator.createPost(null) })
         GlowChip(text = "قصة", icon = AbIcons.PhotoCamera, accentColor = AbColors.Pink, onClick = navigator.createStory)
         GlowChip(text = "ريلز", icon = AbIcons.SmartDisplay, accentColor = AbColors.Purple, onClick = navigator.openReels)
+        GlowChip(text = "قروب", icon = AbIcons.GroupAdd, accentColor = AbColors.Cyan, onClick = navigator.openCreateGroup)
+        GlowChip(text = "استطلاع", icon = AbIcons.BarChart, accentColor = AbColors.Gold, onClick = { navigator.createPost(null) })
         GlowChip(text = "النقابات", icon = AbIcons.Shield, accentColor = AbColors.Emerald, onClick = navigator.openCommunity)
         GlowChip(text = "الأنمي", icon = AbIcons.LiveTv, accentColor = AbColors.Blue, onClick = navigator.openAnime)
         GlowChip(text = "الألعاب", icon = AbIcons.SportsEsports, accentColor = AbColors.Gold, onClick = navigator.openGames)

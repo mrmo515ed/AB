@@ -457,6 +457,7 @@ private fun AppNavHost(navController: NavHostController, viewModel: MainViewMode
         openMention = openMention,
         openReels = { navController.navigate(ReelsRoute) },
         openCommunity = { navController.navigate(CommunityRoute) },
+        openCreateGroup = { navController.navigate(com.animeblack.core.navigation.CreateGroupRoute) },
         openAnime = { navController.navigate(AnimeHubRoute) },
         openGames = { navController.navigate(GamesHubRoute) },
         openEconomy = { navController.navigate(EconomyRoute) },

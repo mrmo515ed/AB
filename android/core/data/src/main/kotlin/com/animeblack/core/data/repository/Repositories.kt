@@ -211,6 +211,12 @@ interface ChatRepository {
     suspend fun markRead(chatId: String, messages: List<ChatMessage>)
     suspend fun setTyping(chatId: String, typing: Boolean)
     suspend fun setWallpaper(chatId: String, wallpaper: String?): AppResult<Unit>
+    /** Pins / unpins a message at the top of the conversation (synced `pinnedMsgs`). */
+    suspend fun pinMessage(chatId: String, messageId: String, pinned: Boolean): AppResult<Unit>
+    /** Disappearing messages window: 0 off, 24 or 72 hours (synced `vanish`). */
+    suspend fun setVanish(chatId: String, hours: Int): AppResult<Unit>
+    /** Forwards a copy of [message] into another conversation (web `sendFwd`). */
+    suspend fun forwardMessage(message: ChatMessage, targetChatId: String, targetPartnerId: String): AppResult<Unit>
     suspend fun deleteConversation(chatId: String): AppResult<Unit>
     suspend fun retryFailed(chatId: String)
     suspend fun resolveMediaUrl(attachmentSrc: String, storagePath: String?): String
@@ -256,6 +262,8 @@ interface CommunityRepository {
     /** Sticker (SVG data URL) or GIF message — same shape as private chat stickers. */
     suspend fun sendRoomSticker(room: RoomRef, url: String, type: String): AppResult<Unit>
     suspend fun deleteRoomMessage(room: RoomRef, messageId: String): AppResult<Unit>
+    /** Reaction on a group / world / channel message (same `reactions.{uid}` shape as DMs). */
+    suspend fun reactRoomMessage(room: RoomRef, messageId: String, reactionKey: String?): AppResult<Unit>
 }
 
 // ============================================================================ Notifications

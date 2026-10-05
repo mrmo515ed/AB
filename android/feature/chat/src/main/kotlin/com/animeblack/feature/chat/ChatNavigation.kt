@@ -26,6 +26,7 @@ fun NavGraphBuilder.chatGraph(navController: NavController, openMention: (String
                 openChat = { chatId, partnerId -> navController.navigate(ChatRoomRoute(chatId = chatId, partnerId = partnerId)) },
                 newChat = { navController.navigate(NewChatRoute) },
                 openRequests = { navController.navigate(ChatRequestsRoute) },
+                openGroup = { navController.navigate(com.animeblack.core.navigation.GroupRoomRoute(it)) },
             ),
         )
     }

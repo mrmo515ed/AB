@@ -64,11 +64,23 @@ data class ProfileUiState(
     val canSeeContent: Boolean get() = isMe || user?.privacy?.privateAccount != true || isFollowing
 }
 
+/** A joined space (group / world / community) shown in the profile's المجتمعات tab. */
+data class JoinedSpace(
+    val kind: String,
+    val id: String,
+    val name: String,
+    val icon: String,
+    val color1: String,
+    val color2: String,
+    val subtitle: String,
+)
+
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val users: UserRepository,
     private val postRepository: PostRepository,
+    community: com.animeblack.core.data.repository.CommunityRepository,
     reels: ReelRepository,
     auth: AuthRepository,
     levelBadges: LevelBadgeRepository,
@@ -98,6 +110,32 @@ class ProfileViewModel @Inject constructor(
     val posts: Flow<PagingData<Post>> = uid.filterNotNull().distinctUntilChanged()
         .flatMapLatest { id -> if (id == NOT_FOUND) flowOf(PagingData.empty()) else postRepository.userPosts(id) }
         .cachedIn(viewModelScope)
+
+    /** Saved posts for the المحفوظات tab (own profile only). */
+    val savedPosts: StateFlow<List<Post>> = postRepository.observeSavedPosts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Groups / worlds / communities I belong to — the نقاباتي ومجتمعاتي tab. */
+    val joinedSpaces: StateFlow<List<JoinedSpace>> = combine(
+        community.observeGroups(),
+        community.observeWorlds(),
+        community.observeCommunities(),
+        users.observeMe(),
+    ) { groups, worlds, communities, me ->
+        val uidMe = me?.id.orEmpty()
+        if (uidMe.isBlank()) return@combine emptyList<JoinedSpace>()
+        buildList {
+            groups.filter { uidMe in it.memberUids || uidMe in it.members || uidMe == it.ownerId }.forEach {
+                add(JoinedSpace("group", it.id, it.name, it.icon, it.color1, it.color2, "${it.memberUids.size.coerceAtLeast(it.members.size)} أعضاء"))
+            }
+            worlds.filter { uidMe in it.memberUids || uidMe == it.ownerId }.forEach {
+                add(JoinedSpace("world", it.id, it.name, it.icon, it.color1, it.color2, "${it.memberUids.size.coerceAtLeast(it.membersCount)} أعضاء"))
+            }
+            communities.filter { uidMe in it.memberUids || uidMe == it.ownerId }.forEach {
+                add(JoinedSpace("community", it.id, it.name, "shield", it.color1, it.color2, it.tag.ifBlank { "نقابة" }))
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val profileUser: Flow<Pair<Boolean, User?>> = uid.flatMapLatest { id ->
         when (id) {

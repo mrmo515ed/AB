@@ -92,7 +92,7 @@
     <string name="set_google_signin">تسجيل الدخول بجوجل</string>
     <string name="set_google_ready">جاهز</string>
     <string name="set_google_sha_missing">يحتاج تسجيل بصمة SHA-1 في Firebase</string>
-    <string name="set_google_hint">يعمل تسجيل الدخول بجوجل بعد تسجيل بصمة SHA-1 لهذا التطبيق في Firebase (Project settings ← Your apps ← Add fingerprint) ثم تنزيل google-services.json من جديد.</string>
+    <string name="set_google_hint">تسجيل الدخول بجوجل يحفظ حسابك ويزامن كل بياناتك (المنشورات، المحادثات، المحفظة، المستويات) على السيرفر السحابي تلقائياً. لتفعيله: سجّل بصمة التطبيق (بالأسفل) في مشروع Firebase ← Project settings ← Your apps ← Add fingerprint ثم نزّل google-services.json من جديد. البصمة المطلوبة موجودة أدناه — انسخها كما هي.</string>
     <string name="set_server_title">خادم الذكاء الاصطناعي (وكيل البحث)</string>
     <string name="set_server_hint">https://your-server.example.com</string>
     <string name="set_server_body">عنوان خادم Anime Black الذي يشغّل وكيل البحث الذكي. يُحفظ على هذا الجهاز فقط؛ اتركه فارغًا لاستخدام العنوان المدمج في هذا الإصدار.</string>

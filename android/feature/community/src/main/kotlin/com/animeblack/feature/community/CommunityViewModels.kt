@@ -231,6 +231,17 @@ class RoomViewModel @Inject constructor(
     }
     fun cancelReply() = _composer.update { it.copy(replyTo = null) }
 
+    fun react(message: ChatMessage, key: String?) = viewModelScope.launch {
+        val r = repository.reactRoomMessage(room, message.id, key)
+        if (r is AppResult.Failure) _messages.tryEmit(r.error.messageRes())
+    }
+
+    /** Bubble tap / chip tap toggles; double-tap quick-reacts with love. */
+    fun toggleReaction(message: ChatMessage, key: String) =
+        react(message, if (message.reactions[state.value.myUid] == key) null else key)
+
+    fun doubleTapReact(message: ChatMessage) = toggleReaction(message, "love")
+
     fun send() {
         val c = _composer.value
         if (c.sending || (c.text.isBlank() && c.attachments.isEmpty())) return

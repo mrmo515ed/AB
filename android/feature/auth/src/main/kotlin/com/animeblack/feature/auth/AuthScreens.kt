@@ -439,14 +439,9 @@ fun LoginScreen(
                             PasswordField(state.password, viewModel::onPassword, state.passwordError, viewModel::signIn)
                             Row(
                                 Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TextButton(onClick = { activeTab = 2 }) {
-                                    AbIcon(AbIcons.Bolt, null, tint = AbColors.Cyan, size = 15.dp)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("دخول سريع كضيف", color = AbColors.Cyan, style = MaterialTheme.typography.labelMedium)
-                                }
                                 TextButton(onClick = onForgot) {
                                     Text(stringResource(R.string.auth_forgot), color = AbColors.Violet)
                                 }
@@ -496,9 +491,6 @@ fun LoginScreen(
                             )
                         }
 
-                        else -> {
-                            QuickStartSection(state, viewModel)
-                        }
                     }
                 }
 
@@ -580,51 +572,13 @@ fun LoginScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("• المشروع السحابي: animeblackapp-b6223", color = Color.White, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                    Text("• خدمات المصادقة: البريد الإلكتروني + Google Sign-In + دخول الضيف السريع", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    Text("• خدمات المصادقة: البريد الإلكتروني + Google Sign-In", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
                     Text("• قاعدة البيانات والتخزين: Cloud Firestore + Realtime Sync + Offline Cache", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showServerDialog = false }) { Text("إغلاق", color = AbColors.Cyan, fontWeight = FontWeight.Bold) }
             },
-        )
-    }
-}
-
-/** Name + username and straight into the app (a guest account that can be saved later). */
-@Composable
-private fun QuickStartSection(state: AuthUiState, viewModel: AuthViewModel) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconTile(icon = AbIcons.RocketLaunch, size = 36.dp, brush = AbColors.CyanVioletGradient)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.auth_quick_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(stringResource(R.string.auth_guest_hint), style = MaterialTheme.typography.labelSmall, color = AbTheme.colors.textMuted)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        AbTextField(
-            value = state.quickName,
-            onValueChange = viewModel::onQuickName,
-            label = stringResource(R.string.auth_quick_name),
-            leadingIcon = AbIcons.Person,
-        )
-        Spacer(Modifier.height(8.dp))
-        AbTextField(
-            value = state.quickUsername,
-            onValueChange = viewModel::onQuickUsername,
-            label = stringResource(R.string.auth_quick_username),
-            leadingIcon = AbIcons.AlternateEmail,
-            error = state.quickUsernameError?.let { stringResource(it) },
-        )
-        Spacer(Modifier.height(12.dp))
-        GradientButton(
-            text = stringResource(R.string.auth_quick_enter),
-            onClick = viewModel::quickStart,
-            loading = state.loading,
-            icon = AbIcons.RocketLaunch,
-            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

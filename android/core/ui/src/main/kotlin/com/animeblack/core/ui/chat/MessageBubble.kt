@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +26,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +78,12 @@ fun MessageBubble(
     showSender: Boolean = false,
     grouped: Boolean = false,
     highlighted: Boolean = false,
+    starred: Boolean = false,
+    selectMode: Boolean = false,
+    selected: Boolean = false,
+    onSelect: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
+    onSwipeReply: (() -> Unit)? = null,
     resolveUrl: (suspend (Attachment) -> String)? = null,
     onLongPress: () -> Unit = {},
     onOpenMedia: (url: String, type: String, name: String) -> Unit = { _, _, _ -> },
@@ -85,6 +98,11 @@ fun MessageBubble(
         SystemEvent(message.text, modifier)
         return
     }
+    // Swipe-to-reply: drag the bubble sideways; crossing the threshold answers the message.
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val swipeThreshold = remember(density) { with(density) { 72.dp.toPx() } }
+    val swipeEnabled = onSwipeReply != null && !selectMode && !message.isDeleted
     val shape = RoundedCornerShape(
         topStart = 18.dp,
         topEnd = 18.dp,
@@ -96,17 +114,60 @@ fun MessageBubble(
     val contentColor = if (isMine) Color.White else AbColors.TextPrimary
 
     Row(
-        modifier.fillMaxWidth().padding(top = if (grouped) 2.dp else 8.dp, start = 8.dp, end = 8.dp),
+        modifier
+            .fillMaxWidth()
+            .padding(top = if (grouped) 2.dp else 8.dp, start = 8.dp, end = 8.dp)
+            .then(
+                if (swipeEnabled) {
+                    Modifier.pointerInput(message.id) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                if (kotlin.math.abs(swipeOffset) >= swipeThreshold) onSwipeReply?.invoke()
+                                swipeOffset = 0f
+                            },
+                            onDragCancel = { swipeOffset = 0f },
+                        ) { change, drag ->
+                            if (kotlin.math.abs(drag.x) > kotlin.math.abs(drag.y) * 1.2f) {
+                                change.consume()
+                                val limit = swipeThreshold * 1.5f
+                                swipeOffset = (swipeOffset + drag.x).coerceIn(-limit, limit)
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            )
+            .then(if (selectMode) Modifier.clickable { onSelect?.invoke() } else Modifier),
         horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom,
     ) {
-        if (!isMine && showSender) {
+        if (selectMode) {
+            Box(Modifier.padding(top = 10.dp), contentAlignment = Alignment.Center) {
+                AbIcon(
+                    if (selected) AbIcons.CheckCircle else AbIcons.RadioButtonChecked,
+                    null,
+                    tint = if (selected) AbColors.Cyan else AbColors.TextMuted,
+                    size = 22.dp,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+        }
+        if (!isMine && showSender && !selectMode) {
             if (grouped) {
                 Spacer(Modifier.width(30.dp))
             } else {
                 Avatar(message.senderAvatar, message.senderName, size = 30.dp, onClick = { onOpenUser(message.senderId) })
             }
             Spacer(Modifier.width(6.dp))
+        }
+        // Reply affordance revealed while dragging the bubble sideways.
+        if (swipeEnabled && swipeOffset != 0f) {
+            val progress = (kotlin.math.abs(swipeOffset) / swipeThreshold).coerceIn(0f, 1.3f)
+            Box(Modifier.padding(top = 10.dp).align(Alignment.CenterVertically), contentAlignment = Alignment.Center) {
+                AbIcon(AbIcons.Reply, null, tint = AbColors.Cyan.copy(alpha = (0.25f + 0.75f * progress).coerceAtMost(1f)), size = (16 + 8 * progress).dp)
+            }
+            Spacer(Modifier.width(4.dp))
         }
         Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start, modifier = Modifier.widthIn(max = 300.dp)) {
             val background = when {
@@ -116,12 +177,24 @@ fun MessageBubble(
             }
             Column(
                 Modifier
+                    .graphicsLayer { translationX = swipeOffset }
                     .clip(shape)
                     .then(background)
                     .then(if (highlighted) Modifier.border(2.dp, AbColors.Cyan, shape) else Modifier)
-                    .combinedClickable(onClick = { if (failed) onRetry() }, onLongClick = onLongPress)
+                    .combinedClickable(
+                        onClick = { if (failed) onRetry() },
+                        onDoubleClick = if (!selectMode) onDoubleTap else null,
+                        onLongClick = if (selectMode) ({ onSelect?.invoke() }) else onLongPress,
+                    )
                     .padding(if (stickerOnly) 0.dp else 8.dp),
             ) {
+                if (message.forwarded && !message.isDeleted) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        AbIcon(AbIcons.Forward, null, tint = contentColor.copy(alpha = 0.75f), size = 13.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("مُعاد توجيهها", color = contentColor.copy(alpha = 0.75f), fontStyle = FontStyle.Italic, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
                 if (showSender && !isMine && !grouped && message.senderName.isNotBlank()) {
                     Text(
                         message.senderName,
@@ -156,7 +229,7 @@ fun MessageBubble(
                         )
                     }
                 }
-                Footer(message, isMine, contentColor, Modifier.align(Alignment.End))
+                Footer(message, isMine, contentColor, Modifier.align(Alignment.End), starred = starred)
             }
             if (message.isPending && message.uploadProgress in 0..99) {
                 LinearProgressIndicator(
@@ -320,8 +393,12 @@ private fun FileAttachment(a: Attachment, contentColor: Color, onOpen: () -> Uni
 }
 
 @Composable
-private fun Footer(message: ChatMessage, isMine: Boolean, contentColor: Color, modifier: Modifier) {
+private fun Footer(message: ChatMessage, isMine: Boolean, contentColor: Color, modifier: Modifier, starred: Boolean = false) {
     Row(modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (starred && !message.isDeleted) {
+            AbIcon(AbIcons.StarFilled, null, tint = AbColors.Gold, size = 12.dp)
+            Spacer(Modifier.width(4.dp))
+        }
         if (message.isEdited && !message.isDeleted) {
             Text(stringResource(R.string.ui_edited), color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(4.dp))

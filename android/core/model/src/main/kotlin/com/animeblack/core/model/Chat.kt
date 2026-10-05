@@ -17,7 +17,13 @@ data class Conversation(
     val unreadCounts: Map<String, Int> = emptyMap(),
     val wallpaper: String? = null,
     val deleted: Boolean = false,
+    /** Message ids pinned to the top of the room (web `pinnedMsgs`). */
+    val pinnedMsgs: List<String> = emptyList(),
+    /** Disappearing-messages window in hours: 0 off, 24 or 72 (web `vanish`). */
+    val vanishHours: Int = 0,
 ) {
+    /** Last pinned message id (the one shown in the pinned banner), if any. */
+    val lastPinnedMsgId: String? get() = pinnedMsgs.lastOrNull()
     fun isPartnerTyping(now: Long, myUid: String): Boolean =
         typing.any { (uid, ts) -> uid != myUid && ts > 0 && now - ts < TYPING_TIMEOUT_MS }
 
@@ -94,6 +100,8 @@ data class ChatMessage(
     /** True while the write is only in the local Firestore cache / outbox. */
     val isPending: Boolean = false,
     val uploadProgress: Int = 100,
+    /** Forwarded copy of another message (web `fwd` flag). */
+    val forwarded: Boolean = false,
 ) {
     fun isMine(myUid: String): Boolean = senderId == myUid
     fun isVisibleTo(uid: String): Boolean = uid !in deletedFor

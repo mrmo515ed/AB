@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -103,6 +104,9 @@ data class ProfileActions(
     val openMention: (String) -> Unit,
     val report: (targetType: String, targetId: String) -> Unit,
     val editPost: (String) -> Unit,
+    val openGroup: (String) -> Unit = {},
+    val openWorld: (String) -> Unit = {},
+    val openCommunity: (String) -> Unit = {},
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -110,6 +114,8 @@ data class ProfileActions(
 fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val levelCatalog by viewModel.levelCatalog.collectAsStateWithLifecycle()
+    val savedPosts by viewModel.savedPosts.collectAsStateWithLifecycle()
+    val joinedSpaces by viewModel.joinedSpaces.collectAsStateWithLifecycle()
     val posts = viewModel.posts.collectAsLazyPagingItems()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -177,10 +183,25 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
                     }
                     else -> {
                         item(key = "tabs") {
-                            PrimaryTabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
-                                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.profile_posts)) })
-                                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.profile_reels) + " (${state.reels.size})") })
-                                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("الوسائط") })
+                            val tabs = buildList {
+                                add(stringResource(R.string.profile_posts))
+                                add(stringResource(R.string.profile_reels) + " (${state.reels.size})")
+                                add("الوسائط")
+                                if (state.isMe) {
+                                    add("المحفوظات (${savedPosts.size})")
+                                    add("المجتمعات (${joinedSpaces.size})")
+                                    add("التحليلات")
+                                }
+                            }
+                            androidx.compose.material3.ScrollableTabRow(
+                                selectedTabIndex = tab.coerceAtMost(tabs.lastIndex),
+                                containerColor = Color.Transparent,
+                                edgePadding = 8.dp,
+                                divider = {},
+                            ) {
+                                tabs.forEachIndexed { i, label ->
+                                    Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label, maxLines = 1) })
+                                }
                             }
                         }
                         when (tab) {
@@ -235,7 +256,7 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
                                     Spacer(Modifier.height(2.dp))
                                 }
                             }
-                            else -> {
+                            2 -> {
                                 items(count = posts.itemCount, key = { "media_$it" }) { index ->
                                     val post = posts[index]
                                     if (post != null && post.media != null && post.media!!.items.isNotEmpty()) {
@@ -246,6 +267,101 @@ fun ProfileScreen(actions: ProfileActions, viewModel: ProfileViewModel = hiltVie
                                             actions = postActions,
                                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                         )
+                                    }
+                                }
+                            }
+                            3 -> {
+                                if (savedPosts.isEmpty()) {
+                                    item(key = "no_saved") { EmptyState(title = "لا منشورات محفوظة بعد", message = "احفظ أي منشور من القائمة ليظهر هنا", icon = AbIcons.Bookmark) }
+                                }
+                                items(savedPosts, key = { "saved_" + it.id }) { post ->
+                                    PostCard(
+                                        post = post,
+                                        myUid = state.myUid,
+                                        saved = true,
+                                        actions = postActions,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    )
+                                }
+                            }
+                            4 -> {
+                                if (joinedSpaces.isEmpty()) {
+                                    item(key = "no_spaces") { EmptyState(title = "لست منضماً لأي مجتمع بعد", message = "استكشف القروبات والنقابات والعوالم من تبويب المجتمع", icon = AbIcons.Groups) }
+                                }
+                                items(joinedSpaces, key = { "space_" + it.kind + "_" + it.id }) { space ->
+                                    Row(
+                                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable {
+                                            when (space.kind) {
+                                                "group" -> actions.openGroup(space.id)
+                                                "world" -> actions.openWorld(space.id)
+                                                else -> actions.openCommunity(space.id)
+                                            }
+                                        }.padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Box(
+                                            Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        listOf(
+                                                            runCatching { Color(android.graphics.Color.parseColor(space.color1)) }.getOrDefault(AbColors.Cyan),
+                                                            runCatching { Color(android.graphics.Color.parseColor(space.color2)) }.getOrDefault(AbColors.Violet),
+                                                        ),
+                                                    ),
+                                                ),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            AbIcon(spaceIcon(space.icon), null, tint = Color.White, size = 22.dp)
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(space.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                            Text(space.subtitle, style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+                                        }
+                                        Pill(
+                                            when (space.kind) {
+                                                "group" -> "قروب"
+                                                "world" -> "عالم"
+                                                else -> "نقابة"
+                                            },
+                                            color = AbColors.Charcoal3,
+                                            textColor = AbColors.Cyan,
+                                        )
+                                    }
+                                }
+                            }
+                            else -> {
+                                item(key = "analytics") {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            AnalyticsCard("المتابعون", compactCount(maxOf(user.followersCount, user.followersList.size)), AbColors.Cyan, Modifier.weight(1f))
+                                            AnalyticsCard("أتابعهم", compactCount(maxOf(user.followingCount, user.followingList.size)), AbColors.Violet, Modifier.weight(1f))
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            AnalyticsCard("السمعة", compactCount(user.reputation), AbColors.Gold, Modifier.weight(1f))
+                                            AnalyticsCard("العملات", compactCount(user.coins), AbColors.Emerald, Modifier.weight(1f))
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            AnalyticsCard("المستوى", user.level.toString(), AbColors.Pink, Modifier.weight(1f))
+                                            AnalyticsCard("الريلز", state.reels.size.toString(), AbColors.Orange, Modifier.weight(1f))
+                                        }
+                                        GlassCard(Modifier.fillMaxWidth()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                AbIcon(AbIcons.TrendingUp, null, tint = AbColors.Cyan, size = 20.dp)
+                                                Spacer(Modifier.width(10.dp))
+                                                Column {
+                                                    Text("نقاط الخبرة (XP)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                    Text("${user.xp.toInt()} / ${user.xpNext.toInt()} للمستوى التالي", color = AbColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                                }
+                                            }
+                                            Spacer(Modifier.height(8.dp))
+                                            LinearProgressIndicator(
+                                                progress = { if (user.xpNext > 0) (user.xp.toFloat() / user.xpNext).coerceIn(0f, 1f) else 0f },
+                                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                                                color = AbColors.Cyan,
+                                                trackColor = AbColors.Charcoal4,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -448,6 +564,30 @@ private fun Stat(value: String, label: String, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(8.dp)) {
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(label, style = MaterialTheme.typography.labelSmall, color = AbColors.TextMuted)
+    }
+}
+
+private fun spaceIcon(icon: String): Int = when (icon) {
+    "users", "group" -> AbIcons.Groups
+    "globe", "world" -> AbIcons.Public
+    "shield", "guild" -> AbIcons.Shield
+    "sword", "swords", "battle" -> AbIcons.Swords
+    "film", "video" -> AbIcons.Movie
+    "book", "manga" -> AbIcons.MenuBook
+    "gamepad", "game" -> AbIcons.SportsEsports
+    "music" -> AbIcons.MusicNote
+    "flame", "fire" -> AbIcons.LocalFireDepartment
+    else -> AbIcons.Groups
+}
+
+@Composable
+private fun AnalyticsCard(label: String, value: String, tint: Color, modifier: Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(tint.copy(alpha = 0.12f)).padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, color = tint, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(label, color = AbColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
     }
 }
 

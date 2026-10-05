@@ -51,6 +51,13 @@ fun MessageActionsSheet(
     onDeleteForEveryone: (() -> Unit)?,
     onReport: (() -> Unit)?,
     onRetry: (() -> Unit)?,
+    onPin: (() -> Unit)? = null,
+    pinned: Boolean = false,
+    onStar: (() -> Unit)? = null,
+    starred: Boolean = false,
+    onForward: (() -> Unit)? = null,
+    onInfo: (() -> Unit)? = null,
+    onSelect: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AbColors.Charcoal2) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
@@ -81,8 +88,17 @@ fun MessageActionsSheet(
             }
             onRetry?.let { ActionRow(AbIcons.Refresh, stringResource(R.string.ui_retry), AbColors.Cyan, it, onDismiss) }
             onReply?.let { ActionRow(AbIcons.Reply, stringResource(R.string.ui_chat_reply), AbColors.TextPrimary, it, onDismiss) }
+            onForward?.let { ActionRow(AbIcons.Forward, "إعادة توجيه لمحادثة أخرى", AbColors.TextPrimary, it, onDismiss) }
             onCopy?.let { ActionRow(AbIcons.ContentCopy, stringResource(R.string.ui_chat_copy), AbColors.TextPrimary, it, onDismiss) }
             onEdit?.let { ActionRow(AbIcons.Edit, stringResource(R.string.ui_edit), AbColors.TextPrimary, it, onDismiss) }
+            onStar?.let {
+                ActionRow(AbIcons.Star, if (starred) "إلغاء تمييز الرسالة" else "تمييز الرسالة بنجمة", AbColors.Gold, it, onDismiss)
+            }
+            onPin?.let {
+                ActionRow(AbIcons.PushPin, if (pinned) "إلغاء تثبيت الرسالة" else "تثبيت أعلى المحادثة", AbColors.Gold, it, onDismiss)
+            }
+            onInfo?.let { ActionRow(AbIcons.Info, "معلومات الرسالة", AbColors.Cyan, it, onDismiss) }
+            onSelect?.let { ActionRow(AbIcons.CheckCircle, "تحديد الرسالة", AbColors.TextPrimary, it, onDismiss) }
             onDeleteForMe?.let { ActionRow(AbIcons.Delete, stringResource(R.string.ui_chat_delete_for_me), AbColors.TextPrimary, it, onDismiss) }
             onDeleteForEveryone?.let { ActionRow(AbIcons.DeleteForever, stringResource(R.string.ui_chat_delete_for_all), AbColors.Rose, it, onDismiss) }
             onReport?.let { ActionRow(AbIcons.Flag, stringResource(R.string.ui_report), AbColors.Orange, it, onDismiss) }

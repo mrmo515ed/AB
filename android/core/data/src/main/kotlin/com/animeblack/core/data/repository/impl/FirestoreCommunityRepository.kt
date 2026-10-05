@@ -416,4 +416,12 @@ class FirestoreCommunityRepository @Inject constructor(
         roomMessages(room).document(messageId).delete()
         Unit
     }
+
+    override suspend fun reactRoomMessage(room: RoomRef, messageId: String, reactionKey: String?): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val me = auth.requireUid()
+        roomMessages(room).document(messageId).update(
+            mapOf("reactions.$me" to (reactionKey ?: FieldValue.delete()), "updatedAt" to System.currentTimeMillis()),
+        )
+        Unit
+    }
 }

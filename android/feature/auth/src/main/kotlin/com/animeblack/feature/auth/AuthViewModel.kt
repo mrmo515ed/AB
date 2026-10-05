@@ -34,10 +34,6 @@ data class AuthUiState(
     val emailError: Boolean = false,
     val passwordError: Boolean = false,
     val nameError: Boolean = false,
-    /** Quick start (guest) form. */
-    val quickName: String = "",
-    val quickUsername: String = "",
-    @StringRes val quickUsernameError: Int? = null,
 )
 
 @HiltViewModel
@@ -75,23 +71,6 @@ class AuthViewModel @Inject constructor(
 
     fun google(activityContext: Context, onlyAuthorized: Boolean = false) =
         perform { auth.signInWithGoogle(activityContext, onlyAuthorized) }
-
-    /** Guest access: full features on a real account (upgradable later). */
-    fun guest() = perform { auth.signInAsGuest() }
-
-    fun onQuickName(value: String) = _state.update { it.copy(quickName = value.take(50), error = null) }
-    fun onQuickUsername(value: String) = _state.update { it.copy(quickUsername = value.take(24), quickUsernameError = null, error = null) }
-
-    /** Quick start: name + username, straight into the app (no e-mail or password). */
-    fun quickStart() {
-        val s = _state.value
-        val username = Validators.normalizeUsername(s.quickUsername)
-        if (s.quickUsername.isNotBlank() && !Validators.isValidUsername(username)) {
-            _state.update { it.copy(quickUsernameError = R.string.auth_err_username_invalid) }
-            return
-        }
-        perform { auth.signInAsGuest(s.quickName, s.quickUsername) }
-    }
 
     fun sendReset() {
         if (!validate(requireName = false, requirePassword = false)) return

@@ -37,6 +37,8 @@ internal fun Map<String, Any?>.toConversation(id: String, myUid: String): Conver
         unreadCounts = obj("unreadCounts")?.mapNotNull { (k, v) -> anyToLong(v)?.let { k to it.toInt() } }?.toMap().orEmpty(),
         wallpaper = strOrNull("wallpaperImg") ?: (this["wallpaper"] as? String),
         deleted = bool("deleted") || bool("deletedForBoth"),
+        pinnedMsgs = strList("pinnedMsgs"),
+        vanishHours = int("vanish"),
     )
 }
 
@@ -90,6 +92,7 @@ internal fun Map<String, Any?>.toChatMessage(id: String, conversationId: String,
         mentions = strList("mentions"),
         voiceDurationSec = int("dur"),
         isPending = pending,
+        forwarded = bool("fwd"),
     )
 }
 

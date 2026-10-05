@@ -588,6 +588,7 @@ fun BlockedUsersScreen(onBack: () -> Unit, openProfile: (String) -> Unit, viewMo
 
 @Composable
 fun SyncDiagnosticsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+    val context = LocalContext.current
     val status by viewModel.syncStatus.collectAsStateWithLifecycle()
     val snackbar = rememberMessages(viewModel)
     Scaffold(topBar = { AbTopBar(title = stringResource(R.string.set_sync), onBack = onBack) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
@@ -617,6 +618,19 @@ fun SyncDiagnosticsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hil
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // Show the exact signing fingerprint to register in Firebase (Google Sign-In sync).
+                    val sha1 = remember { signingSha1(context) }
+                    if (sha1 != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text("بصمة توقيع التطبيق (انسخها إلى Firebase):", color = AbColors.Gold, style = MaterialTheme.typography.labelMedium)
+                                Text(sha1, color = AbColors.TextPrimary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
+                            }
+                            TextButton(onClick = { com.animeblack.core.ui.copyToClipboard(context, sha1) }) {
+                                Text("نسخ البصمة", color = AbColors.Cyan)
+                            }
+                        }
+                    }
                 }
                 HorizontalDivider(color = AbColors.Line2)
                 StatusRow(stringResource(R.string.set_online), stringResource(if (st.online) R.string.set_connected else R.string.set_offline), if (st.online) AbColors.Emerald else AbColors.Rose)
@@ -736,4 +750,24 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
     composable<SyncDiagnosticsRoute> { SyncDiagnosticsScreen(back) }
     composable<ServerConfigRoute> { ServerConfigScreen(back) }
     composable<LegalRoute> { entry -> LegalScreen(entry.toRoute<LegalRoute>().document, back) }
+}
+
+/** SHA-1 of the app signing certificate — the exact value Firebase needs for Google Sign-In. */
+private fun signingSha1(context: Context): String? = try {
+    val pm = context.packageManager
+    val signature = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+        pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+            .signingInfo?.let { info ->
+                if (info.hasMultipleSigners()) info.apkContentsSigners?.firstOrNull() else info.signingCertificateHistory?.firstOrNull() ?: info.apkContentsSigners?.firstOrNull()
+            }
+    } else {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures?.firstOrNull()
+    }
+    signature?.let { sig ->
+        java.security.MessageDigest.getInstance("SHA-1").digest(sig.toByteArray())
+            .joinToString(":") { "%02X".format(it) }
+    }
+} catch (_: Exception) {
+    null
 }

@@ -354,6 +354,82 @@ class FirestoreChatRepository @Inject constructor(
         Unit
     }
 
+    override suspend fun pinMessage(chatId: String, messageId: String, pinned: Boolean): AppResult<Unit> = runCatchingApp(errorMapper) {
+        chats.document(chatId).set(
+            mapOf(
+                "pinnedMsgs" to if (pinned) FieldValue.arrayUnion(messageId) else FieldValue.arrayRemove(messageId),
+                "updatedAt" to System.currentTimeMillis(),
+            ),
+            SetOptions.merge(),
+        )
+        Unit
+    }
+
+    override suspend fun setVanish(chatId: String, hours: Int): AppResult<Unit> = runCatchingApp(errorMapper) {
+        chats.document(chatId).set(
+            mapOf("vanish" to hours.coerceIn(0, 72), "updatedAt" to System.currentTimeMillis()),
+            SetOptions.merge(),
+        )
+        Unit
+    }
+
+    /** Copies a message into another private conversation, flagged `fwd` like the web app. */
+    override suspend fun forwardMessage(message: ChatMessage, targetChatId: String, targetPartnerId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
+        val me = auth.requireUid()
+        if (message.isDeleted) throw AppErrorException(AppError.Validation("message", "deleted"))
+        val senderName = users.getUser(me)?.displayName ?: auth.currentUser?.displayName.orEmpty()
+        val messageId = Ids.message()
+        val now = System.currentTimeMillis()
+        val attachments = message.attachments.map { a ->
+            mapOf("type" to a.type, "src" to a.src, "name" to a.name, "size" to a.size, "dur" to a.durationSec) +
+                (a.storagePath?.let { mapOf("path" to it) } ?: emptyMap())
+        }
+        val preview = when (message.type) {
+            ChatMessage.TYPE_STICKER -> "ملصق"
+            ChatMessage.TYPE_GIF -> "GIF"
+            ChatMessage.TYPE_VOICE -> "رسالة صوتية"
+            ChatMessage.TYPE_IMAGE -> "صورة"
+            ChatMessage.TYPE_VIDEO -> "فيديو"
+            ChatMessage.TYPE_FILE -> "ملف"
+            else -> message.text.take(200)
+        }
+        val doc = buildMap<String, Any?> {
+            put("id", messageId)
+            put("clientMessageId", messageId)
+            put("conversationId", targetChatId)
+            put("senderId", me)
+            put("senderName", senderName)
+            put("type", message.type)
+            put("text", message.text)
+            put("attachments", attachments)
+            put("src", attachments.firstOrNull()?.get("src"))
+            put("at", now)
+            put("createdAt", FieldValue.serverTimestamp())
+            put("updatedAt", now)
+            put("st", 2)
+            put("fwd", true)
+            put("reacts", emptyList<String>())
+            put("isEdited", false)
+            put("isDeleted", false)
+            put("platform", "android")
+            if (message.voiceDurationSec > 0) put("dur", message.voiceDurationSec)
+        }
+        chats.document(targetChatId).set(
+            mapOf(
+                "id" to targetChatId,
+                "participants" to listOf(me, targetPartnerId).sorted(),
+                "last" to "مُعاد توجيهها: $preview".take(200),
+                "lastAt" to now,
+                "lastSenderId" to me,
+                "updatedAt" to now,
+                "unreadCounts" to mapOf(targetPartnerId to FieldValue.increment(1)),
+            ),
+            SetOptions.merge(),
+        )
+        messages(targetChatId).document(messageId).set(doc)
+        Unit
+    }
+
     /** Deletes the conversation for both participants (web `executeDeleteChatBoth`). */
     override suspend fun deleteConversation(chatId: String): AppResult<Unit> = runCatchingApp(errorMapper) {
         val page = messages(chatId).limit(400).getFast(timeoutMs = 1_500L, preferCache = true)

@@ -33,6 +33,9 @@ fun NavGraphBuilder.profileGraph(navController: NavController, openMention: (Str
                 openMention = openMention,
                 report = { type, id -> navController.navigate(ReportRoute(type, id)) },
                 editPost = { id -> navController.navigate(CreatePostRoute(editPostId = id)) },
+                openGroup = { navController.navigate(com.animeblack.core.navigation.GroupRoomRoute(it)) },
+                openWorld = { navController.navigate(com.animeblack.core.navigation.WorldRoomRoute(it)) },
+                openCommunity = { navController.navigate(com.animeblack.core.navigation.CommunityDetailRoute(it)) },
             ),
         )
     }
