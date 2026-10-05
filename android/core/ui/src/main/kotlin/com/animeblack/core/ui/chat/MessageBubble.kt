@@ -184,7 +184,10 @@ fun MessageBubble(
                     .combinedClickable(
                         onClick = { if (failed) onRetry() },
                         onDoubleClick = if (!selectMode) onDoubleTap else null,
-                        onLongClick = if (selectMode) ({ onSelect?.invoke() }) else onLongPress,
+                        onLongClick = if (selectMode) ({
+                            onSelect?.invoke()
+                            Unit
+                        }) else onLongPress,
                     )
                     .padding(if (stickerOnly) 0.dp else 8.dp),
             ) {

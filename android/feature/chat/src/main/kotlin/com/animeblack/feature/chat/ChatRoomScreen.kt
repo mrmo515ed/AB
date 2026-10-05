@@ -373,16 +373,10 @@ fun ChatRoomScreen(
                                     selectMode = state.selectMode,
                                     selected = m.id in state.selectedIds,
                                     onSelect = { viewModel.toggleSelected(m.id) },
-                                    onDoubleTap = if (!state.selectMode && state.canSend && !m.isDeleted && !m.isPending) {
-                                        { viewModel.doubleTapReact(m) }
-                                    } else {
-                                        null
-                                    },
-                                    onSwipeReply = if (!state.selectMode && state.canSend && !state.sendsRequest) {
-                                        { viewModel.reply(m) }
-                                    } else {
-                                        null
-                                    },
+                                    onDoubleTap = { viewModel.doubleTapReact(m) }
+                                        .takeIf { !state.selectMode && state.canSend && !m.isDeleted && !m.isPending },
+                                    onSwipeReply = { viewModel.reply(m) }
+                                        .takeIf { !state.selectMode && state.canSend && !state.sendsRequest },
                                 )
                             }
                         }
@@ -424,9 +418,9 @@ fun ChatRoomScreen(
             onDeleteForEveryone = if (mine && canAct) ({ confirmDelete = m }) else null,
             onReport = if (!mine && !m.isDeleted) ({ actions.report("message", "${state.chatId}/${m.id}") }) else null,
             onRetry = if (mine && m.status == MessageStatus.Failed) ({ viewModel.retry() }) else null,
-            onPin = if (canAct && state.canSend) ({ viewModel.pinMessage(m) }) else null,
+            onPin = { viewModel.pinMessage(m) }.takeIf { canAct && state.canSend },
             pinned = m.id in state.pinnedMsgIds,
-            onStar = if (canAct) ({ viewModel.toggleStar(m) }) else null,
+            onStar = { viewModel.toggleStar(m) }.takeIf { canAct },
             starred = m.id in state.starredIds,
             onForward = if (canAct) ({ forwardFor = m }) else null,
             onInfo = { infoFor = m },
