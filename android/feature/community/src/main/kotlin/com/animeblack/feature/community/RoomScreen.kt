@@ -284,9 +284,8 @@ fun RoomScreen(
                                     onMention = actions.openMention,
                                     onUrl = { context.openExternalUrl(it) },
                                     onReactionClick = { key -> viewModel.toggleReaction(m, key) },
-                                    onDoubleTap = { viewModel.doubleTapReact(m) }
-                                        .takeIf { state.canSend && !m.isDeleted && !m.isPending },
-                                    onSwipeReply = { viewModel.reply(m) }.takeIf { state.canSend },
+                                    onDoubleTap = if (state.canSend && !m.isDeleted && !m.isPending) ({ viewModel.doubleTapReact(m) }) else null,
+                                    onSwipeReply = if (state.canSend) ({ viewModel.reply(m) }) else null,
                                 )
                             }
                         }

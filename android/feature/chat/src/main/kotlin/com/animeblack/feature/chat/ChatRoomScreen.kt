@@ -5,6 +5,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -373,10 +374,8 @@ fun ChatRoomScreen(
                                     selectMode = state.selectMode,
                                     selected = m.id in state.selectedIds,
                                     onSelect = { viewModel.toggleSelected(m.id) },
-                                    onDoubleTap = { viewModel.doubleTapReact(m) }
-                                        .takeIf { !state.selectMode && state.canSend && !m.isDeleted && !m.isPending },
-                                    onSwipeReply = { viewModel.reply(m) }
-                                        .takeIf { !state.selectMode && state.canSend && !state.sendsRequest },
+                                    onDoubleTap = if (!state.selectMode && state.canSend && !m.isDeleted && !m.isPending) ({ viewModel.doubleTapReact(m) }) else null,
+                                    onSwipeReply = if (!state.selectMode && state.canSend && !state.sendsRequest) ({ viewModel.reply(m) }) else null,
                                 )
                             }
                         }
@@ -418,9 +417,9 @@ fun ChatRoomScreen(
             onDeleteForEveryone = if (mine && canAct) ({ confirmDelete = m }) else null,
             onReport = if (!mine && !m.isDeleted) ({ actions.report("message", "${state.chatId}/${m.id}") }) else null,
             onRetry = if (mine && m.status == MessageStatus.Failed) ({ viewModel.retry() }) else null,
-            onPin = { viewModel.pinMessage(m) }.takeIf { canAct && state.canSend },
+            onPin = if (canAct && state.canSend) ({ viewModel.pinMessage(m) }) else null,
             pinned = m.id in state.pinnedMsgIds,
-            onStar = { viewModel.toggleStar(m) }.takeIf { canAct },
+            onStar = if (canAct) ({ viewModel.toggleStar(m) }) else null,
             starred = m.id in state.starredIds,
             onForward = if (canAct) ({ forwardFor = m }) else null,
             onInfo = { infoFor = m },
@@ -455,7 +454,7 @@ fun ChatRoomScreen(
             onSharedMedia = { actions.openInfo(state.chatId, state.partnerId) },
             onStarred = { showStarred = true },
             onStats = { showStats = true },
-            onCycleVanish = viewModel::cycleVanish,
+            onCycleVanish = { viewModel.cycleVanish() },
             onSelectMode = { viewModel.startSelection() },
             onDeleteBoth = { confirmDeleteBoth = true },
         )
